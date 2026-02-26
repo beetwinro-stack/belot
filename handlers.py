@@ -9,8 +9,12 @@ from game import GameState
 from cards import Suit, Rank
 from keyboards import (
     main_menu_keyboard, bidding_keyboard_round1, bidding_keyboard_round2,
-    hand_keyboard, format_scores, next_round_keyboard, declarations_keyboard
+    hand_keyboard, format_scores_full, next_round_keyboard, declarations_keyboard,
+    format_hand_grouped, format_trick_table, score_bar, SUIT_NAMES_RU
 )
+from card_renderer import render_hand, render_trick, cards_to_render_data, trick_to_render_data
+
+DIV = "─" * 24
 
 
 def get_gm(context):
@@ -22,11 +26,25 @@ def player_name(update: Update) -> str:
     return u.full_name or u.username or f"Player{u.id}"
 
 
+def team_line(game, short=False) -> str:
+    p = game.players
+    n = game.player_names
+    if len(p) < 4:
+        return ""
+    if short:
+        return (
+            f"🔵 {n[p[0]]} & {n[p[2]]}  vs  🔴 {n[p[1]]} & {n[p[3]]}"
+        )
+    return (
+        f"🔵 Команда 1: {n[p[0]]} & {n[p[2]]}\n"
+        f"🔴 Команда 2: {n[p[1]]} & {n[p[3]]}"
+    )
+
+
 # ─── /start ────────────────────────────────────────────────────────────────
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if args:
-        # Deep link: /start join_GAMEID
         code = args[0]
         if code.startswith("join_"):
             game_id = code[5:]
@@ -35,7 +53,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         "🃏 *Белот — Молдавские правила*\n\n"
-        "Добро пожаловать! Это карточная игра Белот для 4 игроков (2 команды).\n\n"
+        "Карточная игра для 4 игроков (2 команды).\n"
+        "Первый до 151 очка — победитель!\n\n"
         "Выберите действие:",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=main_menu_keyboard()
@@ -45,29 +64,29 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ─── /help ─────────────────────────────────────────────────────────────────
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "📖 *Правила Белота (belot.md)*\n\n"
-        "👥 4 игрока, 2 команды (сидящие напротив — партнёры)\n"
-        "🃏 32 карты (7–Туз, 4 масти)\n\n"
-        "*Козырь:*\n"
-        "• Валет козырной масти = 20 очков\n"
-        "• Девятка козырной = 14 очков\n"
-        "• Остальные козыри по-обычному\n\n"
-        "*Комбинации:*\n"
-        "• Терц (3 подряд) = 20 очков\n"
-        "• Cinquante (4 подряд) = 50 очков\n"
-        "• Сто (5 подряд) = 100 очков\n"
-        "• Каре тузов/королей/дам/10-ок = 100 очков\n"
-        "• Каре девяток = 150 очков\n"
-        "• Каре валетов = 200 очков\n"
-        "• Белот (K+Q козырной) = 20 очков\n\n"
-        "*Особые правила:*\n"
-        "• 8888 — аннулирует все комбинации (кроме Белота и 7777)\n"
-        "• 7777 — аннулирует весь раунд\n"
-        "• Если перевёрнутая карта — Валет, следующий игрок берёт автоматически\n"
-        "• Все взятки = +90 бонус\n"
-        "• Последняя взятка = +10 очков\n\n"
-        "🏆 *Игра до 151 очка*\n\n"
-        "Команды: 0 и 2, 1 и 3 по порядку рассадки."
+        f"📖 *Правила Белота*\n"
+        f"{DIV}\n"
+        f"👥 4 игрока · 2 команды (сидящие напротив — партнёры)\n"
+        f"🃏 32 карты (7–Туз, 4 масти)\n"
+        f"🏆 Игра до *151 очка*\n\n"
+        f"*Козыри:*\n"
+        f"  ★В (Валет) = 20 очков — самый сильный\n"
+        f"  ★9 (Девятка) = 14 очков\n"
+        f"  ★Т (Туз) = 11, ★10 = 10, ★К = 4, ★Д = 3\n\n"
+        f"*Обычные карты:*\n"
+        f"  Т=11, 10=10, К=4, Д=3, В=2, 9/8/7=0\n\n"
+        f"*Комбинации (объявляются в начале):*\n"
+        f"  Терц  (3 подряд) = 20 очков\n"
+        f"  Cinquante (4 подряд) = 50 очков\n"
+        f"  Сто (5 подряд) = 100 очков\n"
+        f"  Каре Т/К/Д/10 = 100 · Каре 9 = 150 · Каре В = 200\n"
+        f"  💍 Белот К+Д козырной = 20 (объявить во время игры)\n\n"
+        f"*Особые правила:*\n"
+        f"  8888 — аннулирует все комбинации\n"
+        f"  7777 — аннулирует раунд\n"
+        f"  Перевёрнут Валет → следующий берёт авто\n"
+        f"  Все 8 взяток = +90 бонус · Последняя = +10\n\n"
+        f"*Команды:* позиции 1+3 vs 2+4 по порядку входа"
     )
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
@@ -93,11 +112,12 @@ async def create_game_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     join_link = f"https://t.me/{bot_username}?start=join_{game.game_id}"
 
     await update.message.reply_text(
-        f"🃏 *Игра создана!*\n\n"
+        f"🃏 *Игра создана!*\n"
+        f"{DIV}\n"
         f"Код игры: `{game.game_id}`\n\n"
         f"Пригласите 3 друзей по ссылке:\n{join_link}\n\n"
-        f"Или пусть напишут `/join {game.game_id}`\n\n"
-        f"Игроки (1/4): {name}",
+        f"Или пусть напишут:\n`/join {game.game_id}`\n\n"
+        f"👤 1/4  ·  {name} ✅",
         parse_mode=ParseMode.MARKDOWN
     )
 
@@ -124,32 +144,46 @@ async def _do_join(update: Update, context: ContextTypes.DEFAULT_TYPE, game_id: 
         await update.message.reply_text(f"❌ {error}")
         return
 
-    players_text = "\n".join(
-        f"{'🔵' if i % 2 == 0 else '🔴'} {game.player_names[p]}"
-        for i, p in enumerate(game.players)
-    )
+    # Build player list
+    slots = ["⬜️", "⬜️", "⬜️", "⬜️"]
+    team_icons = ["🔵", "🔴", "🔵", "🔴"]
+    player_lines = []
+    for i, p in enumerate(game.players):
+        player_lines.append(f"{team_icons[i]} {game.player_names[p]}")
+    for i in range(len(game.players), 4):
+        player_lines.append(f"⬜️ ожидаем...")
+
+    players_text = "\n".join(player_lines)
 
     if game.is_full():
-        # Game started! Notify all players
         await update.message.reply_text(
-            f"✅ {name} присоединился! Игра начинается!\n\n{players_text}",
+            f"✅ *{name}* вошёл в игру!\n"
+            f"{DIV}\n"
+            f"{players_text}\n\n"
+            f"🚀 Все 4 игрока — начинаем!",
+            parse_mode=ParseMode.MARKDOWN
         )
         await _notify_bidding_start(context, game)
     else:
         count = len(game.players)
         await update.message.reply_text(
-            f"✅ Вы вошли в игру `{game_id}`!\n\n"
-            f"Игроки ({count}/4):\n{players_text}\n\n"
-            f"Ожидаем ещё {4 - count} игрока...",
+            f"✅ Вы вошли в игру `{game_id}`!\n"
+            f"{DIV}\n"
+            f"{players_text}\n\n"
+            f"⏳ Ждём ещё {4 - count} игрока...",
             parse_mode=ParseMode.MARKDOWN
         )
-        # Notify existing players
         for existing_pid in game.players:
             if existing_pid != pid:
                 try:
                     await context.bot.send_message(
                         chat_id=existing_pid,
-                        text=f"👋 {name} присоединился к игре!\nИгроков: {count}/4"
+                        text=(
+                            f"👋 *{name}* присоединился!\n"
+                            f"{players_text}\n"
+                            f"⏳ Ждём ещё {4 - count}..."
+                        ),
+                        parse_mode=ParseMode.MARKDOWN
                     )
                 except Exception:
                     pass
@@ -160,43 +194,41 @@ async def _notify_bidding_start(context, game):
     """Send hands to all players and start bidding."""
     trump = game.trump_suit
     proposed = game.proposed_card
-
-    team_text = (
-        f"🔵 Команда 1: {game.player_names[game.players[0]]} & {game.player_names[game.players[2]]}\n"
-        f"🔴 Команда 2: {game.player_names[game.players[1]]} & {game.player_names[game.players[3]]}"
-    )
+    teams = team_line(game)
 
     if game.auto_trump:
-        # Auto take because Valet was flipped
         taker = game.players[game.taker_idx]
+        taker_name = game.player_names[taker]
         for pid in game.players:
             hand = game.hands[pid]
-            hand_text = " ".join(c.emoji() for c in hand)
+            hand_display = format_hand_grouped(hand, trump_suit=trump)
             await context.bot.send_message(
                 chat_id=pid,
                 text=(
-                    f"🃏 *Раунд {game.round_num} начался!*\n\n"
-                    f"{team_text}\n\n"
-                    f"⚡ Перевёрнута карта *Валет {proposed.suit.value}* — "
-                    f"{game.player_names[taker]} берёт автоматически!\n"
-                    f"Козырь: {trump.value} {trump.name.capitalize()}\n\n"
-                    f"Ваши карты: {hand_text}"
+                    f"🃏 *Раунд {game.round_num}*\n"
+                    f"{DIV}\n"
+                    f"{teams}\n"
+                    f"{DIV}\n"
+                    f"⚡ Перевёрнут *Валет {proposed.suit.value}* — {taker_name} берёт автоматически!\n"
+                    f"★ Козырь: *{trump.value} {SUIT_NAMES_RU[trump]}*\n\n"
+                    f"🖐 Ваши карты:\n{hand_display}"
                 ),
                 parse_mode=ParseMode.MARKDOWN
             )
         await _start_declarations(context, game)
     else:
-        # Normal bidding
         for pid in game.players:
             hand = game.hands[pid]
-            hand_text = " ".join(c.emoji() for c in hand)
+            hand_display = format_hand_grouped(hand)
             await context.bot.send_message(
                 chat_id=pid,
                 text=(
-                    f"🃏 *Раунд {game.round_num} начался!*\n\n"
-                    f"{team_text}\n\n"
+                    f"🃏 *Раунд {game.round_num}*\n"
+                    f"{DIV}\n"
+                    f"{teams}\n"
+                    f"{DIV}\n"
                     f"Перевёрнутая карта: *{proposed.emoji()}*\n\n"
-                    f"Ваши карты: {hand_text}"
+                    f"🖐 Ваши карты:\n{hand_display}"
                 ),
                 parse_mode=ParseMode.MARKDOWN
             )
@@ -210,15 +242,18 @@ async def _ask_bid(context, game):
 
     if game.bidding_round == 1:
         text = (
-            f"🎴 *Торги — Раунд 1*\n\n"
-            f"Предложенный козырь: *{proposed.emoji()}* ({proposed.suit.name.capitalize()})\n\n"
+            f"🎴 *Торги — Круг 1*\n"
+            f"{DIV}\n"
+            f"Предложен козырь: *{proposed.emoji()}* — {SUIT_NAMES_RU[proposed.suit]}\n\n"
             f"Взять этот козырь или пас?"
         )
         kb = bidding_keyboard_round1(proposed.suit)
     else:
         text = (
-            f"🎴 *Торги — Раунд 2*\n\n"
-            f"Все спасовали. Выберите любую масть (кроме {proposed.suit.value}) или пас:"
+            f"🎴 *Торги — Круг 2*\n"
+            f"{DIV}\n"
+            f"Все спасовали.\n"
+            f"Выберите любую масть (кроме {proposed.suit.value} {SUIT_NAMES_RU[proposed.suit]}) или пас:"
         )
         kb = bidding_keyboard_round2(proposed.suit)
 
@@ -229,12 +264,11 @@ async def _ask_bid(context, game):
         reply_markup=kb
     )
 
-    # Notify others it's not their turn
     for pid in game.players:
         if pid != bidder_id:
             await context.bot.send_message(
                 chat_id=pid,
-                text=f"⏳ Ход торгов у *{game.player_names[bidder_id]}*",
+                text=f"⏳ Торгует *{game.player_names[bidder_id]}*...",
                 parse_mode=ParseMode.MARKDOWN
             )
 
@@ -242,9 +276,9 @@ async def _ask_bid(context, game):
 async def _start_declarations(context, game):
     """Ask all players to submit declarations."""
     trump = game.trump_suit
+
     for pid in game.players:
         hand = game.hands[pid]
-        hand_text = " ".join(c.emoji() for c in hand)
 
         from declarations import get_all_declarations, check_belot
         decls = get_all_declarations(hand, trump)
@@ -252,18 +286,29 @@ async def _start_declarations(context, game):
 
         decl_text = ""
         if decls:
-            decl_text = "\n🃏 Ваши комбинации:\n" + "\n".join(f"  • {d['name']}" for d in decls)
+            decl_lines = "\n".join(f"  📌 {d['name']}" for d in decls)
+            decl_text = f"\n\n🃏 *Ваши комбинации:*\n{decl_lines}"
         if belot:
-            decl_text += "\n  • 💍 Белот (K+Q козырной) = 20 очков (объявите во время игры)"
+            decl_text += "\n  💍 Белот К+Д козырной = 20 (объявите во время игры)"
+        if not decls and not belot:
+            decl_text = "\n\n_(комбинаций нет)_"
 
-        await context.bot.send_message(
+        # Render full hand image (all cards valid at this point)
+        render_data = cards_to_render_data(hand, None, trump)
+        label = f"★ Козырь: {trump.value} {SUIT_NAMES_RU[trump]}"
+        hand_img = render_hand(render_data, label=label)
+
+        caption = (
+            f"★ Козырь: *{trump.value} {SUIT_NAMES_RU[trump]}*\n"
+            f"{DIV}"
+            f"{decl_text}\n\n"
+            f"Нажмите кнопку чтобы заявить комбинации:"
+        )
+
+        await context.bot.send_photo(
             chat_id=pid,
-            text=(
-                f"🎯 Козырь определён: *{trump.value} {trump.name.capitalize()}*\n\n"
-                f"Ваши карты: {hand_text}"
-                f"{decl_text}\n\n"
-                f"Нажмите кнопку чтобы заявить комбинации и начать игру:"
-            ),
+            photo=hand_img,
+            caption=caption,
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("📣 Заявить комбинации", callback_data=f"declare:{game.game_id}")]
@@ -272,33 +317,46 @@ async def _start_declarations(context, game):
 
 
 async def _send_hand(context, game, player_id):
-    """Send player their hand with valid cards marked."""
+    """Send player their hand as a card image with action buttons."""
     hand = game.hands[player_id]
     valid = game.get_valid_cards(player_id)
     trump = game.trump_suit
 
-    hand_text = " ".join(
-        f"[{c.emoji()}]" if c in valid else c.emoji()
-        for c in hand
-    )
-    trick_text = ""
-    if game.current_trick:
-        trick_text = "\n\nСтол: " + " | ".join(
-            f"{game.player_names[p]}: {card.emoji()}"
-            for p, card in game.current_trick
-        )
+    scores_text = format_scores_full(game)
+    label = f"★ Козырь: {trump.value} {SUIT_NAMES_RU[trump]}   Взятки: 🔵{game.tricks_won[0]}  🔴{game.tricks_won[1]}"
+
+    # Render hand image
+    render_data = cards_to_render_data(hand, valid, trump)
+    hand_img = render_hand(render_data, label=label)
 
     kb = hand_keyboard(hand, valid, game.game_id)
 
-    await context.bot.send_message(
+    caption = (
+        f"🎮 *Ваш ход!*\n"
+        f"{DIV}\n"
+        f"{scores_text}\n"
+        f"{DIV}\n"
+        f"👇 Нажмите на карту чтобы сыграть:\n"
+        f"_(серые карты нельзя сыграть по правилам)_"
+    )
+
+    # If there's a current trick, send trick image first
+    if game.current_trick:
+        trick_data, trick_labels = trick_to_render_data(
+            game.current_trick, trump, game.player_names
+        )
+        trick_img = render_trick(trick_data, trick_labels)
+        await context.bot.send_photo(
+            chat_id=player_id,
+            photo=trick_img,
+            caption="🃏 *На столе:*",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    await context.bot.send_photo(
         chat_id=player_id,
-        text=(
-            f"🎮 *Ваш ход!*\n"
-            f"Козырь: {trump.value} {trump.name.capitalize()}\n\n"
-            f"Ваши карты ({len(hand)}):\n{hand_text}"
-            f"{trick_text}\n\n"
-            f"Выберите карту:"
-        ),
+        photo=hand_img,
+        caption=caption,
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=kb
     )
@@ -327,11 +385,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bot_username = (await bot.get_me()).username
         join_link = f"https://t.me/{bot_username}?start=join_{game.game_id}"
         await query.edit_message_text(
-            f"🃏 *Игра создана!*\n\n"
+            f"🃏 *Игра создана!*\n"
+            f"{DIV}\n"
             f"Код: `{game.game_id}`\n\n"
             f"Пригласительная ссылка:\n{join_link}\n\n"
             f"Или друзья пишут: `/join {game.game_id}`\n\n"
-            f"Ожидаем игроков (1/4)...",
+            f"👤 1/4 · {name} ✅\n"
+            f"⬜️ Ожидаем ещё 3...",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -339,7 +399,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Join game prompt ──
     if data == "join_game_prompt":
         await query.edit_message_text(
-            "Введите команду: `/join КОД_ИГРЫ`\n\nКод получите у создателя игры.",
+            "Введите команду:\n`/join КОД_ИГРЫ`\n\nКод получите у создателя игры.",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -347,16 +407,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Rules ──
     if data == "show_rules":
         await query.edit_message_text(
-            "📖 Напишите /help для просмотра правил.",
+            "📖 Напишите /help для просмотра полных правил.",
         )
         return
 
-    # ── Bidding ──
+    # ── All game actions ──
     game = gm.get_game_by_player(pid)
     if not game:
         await query.answer("Вы не в игре.", show_alert=True)
         return
 
+    # ── Bidding ──
     if data == "bid_pass":
         result = game.bid_pass(pid)
         if not result["ok"]:
@@ -370,12 +431,18 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             game.start_round()
             await _notify_bidding_start(context, game)
         elif result.get("round2"):
-            await query.edit_message_text("⏭ Пас. Начинается второй круг торгов.")
+            await query.edit_message_text(
+                f"⏭ Пас.\n🎴 Начинается второй круг торгов — теперь можно выбрать любую масть!"
+            )
             for p in game.players:
                 if p != pid:
                     await context.bot.send_message(
                         chat_id=p,
-                        text=f"⏭ {game.player_names[pid]} спасовал. Второй круг торгов."
+                        text=(
+                            f"⏭ *{game.player_names[pid]}* спасовал.\n"
+                            f"🎴 Второй круг торгов — выбор любой масти!"
+                        ),
+                        parse_mode=ParseMode.MARKDOWN
                     )
             await _ask_bid(context, game)
         else:
@@ -384,7 +451,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if p != pid:
                     await context.bot.send_message(
                         chat_id=p,
-                        text=f"⏭ {game.player_names[pid]} спасовал."
+                        text=f"⏭ *{game.player_names[pid]}* спасовал.",
+                        parse_mode=ParseMode.MARKDOWN
                     )
             await _ask_bid(context, game)
         return
@@ -399,13 +467,18 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         trump = game.trump_suit
         await query.edit_message_text(
-            f"✅ Вы берёте! Козырь: {trump.value} {trump.name.capitalize()}"
+            f"✅ Вы берёте!\n★ Козырь: *{trump.value} {SUIT_NAMES_RU[trump]}*",
+            parse_mode=ParseMode.MARKDOWN
         )
         for p in game.players:
             if p != pid:
                 await context.bot.send_message(
                     chat_id=p,
-                    text=f"✅ {game.player_names[pid]} берёт козырь: {trump.value} {trump.name.capitalize()}"
+                    text=(
+                        f"✅ *{game.player_names[pid]}* берёт козырь!\n"
+                        f"★ Козырь: *{trump.value} {SUIT_NAMES_RU[trump]}*"
+                    ),
+                    parse_mode=ParseMode.MARKDOWN
                 )
         await _start_declarations(context, game)
         return
@@ -421,28 +494,29 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if result.get("all_done"):
             scores = result["scores"]
-            t0 = game.player_names[game.players[0]]
-            t2 = game.player_names[game.players[2]]
-            t1 = game.player_names[game.players[1]]
-            t3 = game.player_names[game.players[3]]
+            p0, p2 = game.player_names[game.players[0]], game.player_names[game.players[2]]
+            p1, p3 = game.player_names[game.players[1]], game.player_names[game.players[3]]
+            bonus_0 = f"+{scores[0]}" if scores[0] else "0"
+            bonus_1 = f"+{scores[1]}" if scores[1] else "0"
             decl_msg = (
-                f"📊 *Комбинации подсчитаны:*\n"
-                f"🔵 {t0} & {t2}: +{scores[0]} очков\n"
-                f"🔴 {t1} & {t3}: +{scores[1]} очков\n\n"
+                f"📊 *Комбинации объявлены*\n"
+                f"{DIV}\n"
+                f"🔵 {p0} & {p2}: {bonus_0} очков\n"
+                f"🔴 {p1} & {p3}: {bonus_1} очков\n"
+                f"{DIV}\n"
                 f"🎮 Игра начинается!"
             )
             for p in game.players:
                 await context.bot.send_message(
                     chat_id=p, text=decl_msg, parse_mode=ParseMode.MARKDOWN
                 )
-            # Send hand to first player
             first_player = game.players[game.current_player_idx]
             await _send_hand(context, game, first_player)
             for p in game.players:
                 if p != first_player:
                     await context.bot.send_message(
                         chat_id=p,
-                        text=f"⏳ Ожидаем хода *{game.player_names[first_player]}*",
+                        text=f"⏳ Ход у *{game.player_names[first_player]}*",
                         parse_mode=ParseMode.MARKDOWN
                     )
         else:
@@ -451,14 +525,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if p != pid:
                     await context.bot.send_message(
                         chat_id=p,
-                        text=f"⏳ {game.player_names[pid]} заявил комбинации. Ждём ещё {waiting}..."
+                        text=f"📣 *{game.player_names[pid]}* заявил комбинации. Ждём ещё {waiting}...",
+                        parse_mode=ParseMode.MARKDOWN
                     )
         return
 
     # ── Playing cards ──
     if data.startswith("play:"):
         parts = data.split(":")
-        game_id = parts[1]
         card_idx = int(parts[2])
 
         if game.state != GameState.PLAYING:
@@ -481,96 +555,99 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer(result["error"], show_alert=True)
             return
 
-        await query.edit_message_text(f"✅ Вы сыграли: {card.emoji()}")
+        await query.edit_message_text(f"✅ Вы сыграли: *{card.emoji()}*", parse_mode=ParseMode.MARKDOWN)
 
         # Notify others
         for p in game.players:
             if p != pid:
                 await context.bot.send_message(
                     chat_id=p,
-                    text=f"🃏 {game.player_names[pid]} сыграл: {card.emoji()}"
+                    text=f"🃏 *{game.player_names[pid]}* сыграл: {card.emoji()}",
+                    parse_mode=ParseMode.MARKDOWN
                 )
 
         if result.get("trick_done"):
             winner = result["winner"]
             trick_pts = result["trick_pts"]
+            winner_team = result["winner_team"]
+            team_icon = "🔵" if winner_team == 0 else "🔴"
+
             trick_msg = (
-                f"🏅 Взятку забирает *{game.player_names[winner]}* (+{trick_pts} очков)\n"
+                f"🏅 Взятку берёт {team_icon} *{game.player_names[winner]}*"
+                + (f" (+{trick_pts} очков)" if trick_pts else " (+0)")
+                + "\n"
             )
 
             if result.get("round_done"):
                 round_scores = result["round_scores"]
                 total = result["total_scores"]
+                p = game.players
+                n = game.player_names
                 outcome_map = {
                     "taker_wins": "✅ Команда взявшего выполнила контракт!",
-                    "taker_failed": "❌ Команда взявшего не выполнила контракт! Все очки противнику.",
+                    "taker_failed": "❌ Команда взявшего провалила контракт!\n   Все очки достаются противнику.",
                     "tie": "⚖️ Ничья! Очки взявшего переходят на следующий раунд.",
                 }
                 outcome_text = outcome_map.get(result.get("outcome"), "")
-                p0 = game.player_names[game.players[0]]
-                p2 = game.player_names[game.players[2]]
-                p1 = game.player_names[game.players[1]]
-                p3 = game.player_names[game.players[3]]
 
                 round_msg = (
-                    f"{trick_msg}\n"
+                    f"{trick_msg}"
+                    f"{DIV}\n"
                     f"🏁 *Раунд завершён!*\n\n"
                     f"{outcome_text}\n\n"
                     f"Очки раунда:\n"
-                    f"🔵 {p0} & {p2}: {round_scores[0]}\n"
-                    f"🔴 {p1} & {p3}: {round_scores[1]}\n\n"
+                    f"  🔵 {n[p[0]]} & {n[p[2]]}: *{round_scores[0]}*\n"
+                    f"  🔴 {n[p[1]]} & {n[p[3]]}: *{round_scores[1]}*\n"
+                    f"{DIV}\n"
                     f"Общий счёт:\n"
-                    f"🔵 {p0} & {p2}: *{total[0]}* / 151\n"
-                    f"🔴 {p1} & {p3}: *{total[1]}* / 151"
+                    f"  🔵 {score_bar(total[0])}\n"
+                    f"  🔴 {score_bar(total[1])}"
                 )
 
                 if result.get("game_over"):
                     wt = result["winner_team"]
-                    if wt == 0:
-                        win_names = f"{p0} & {p2}"
-                    else:
-                        win_names = f"{p1} & {p3}"
+                    win_names = f"{n[p[0]]} & {n[p[2]]}" if wt == 0 else f"{n[p[1]]} & {n[p[3]]}"
+                    win_icon = "🔵" if wt == 0 else "🔴"
                     game_msg = (
                         f"{round_msg}\n\n"
+                        f"{DIV}\n"
                         f"🎉 *ИГРА ОКОНЧЕНА!*\n"
-                        f"Победители: {'🔵' if wt == 0 else '🔴'} *{win_names}* 🏆"
+                        f"🏆 Победители: {win_icon} *{win_names}* 🏆"
                     )
-                    for p in game.players:
+                    for pl in game.players:
                         await context.bot.send_message(
-                            chat_id=p, text=game_msg, parse_mode=ParseMode.MARKDOWN
+                            chat_id=pl, text=game_msg, parse_mode=ParseMode.MARKDOWN
                         )
                     gm.remove_game(game.game_id)
                 else:
-                    for p in game.players:
+                    for pl in game.players:
                         await context.bot.send_message(
-                            chat_id=p,
+                            chat_id=pl,
                             text=round_msg,
                             parse_mode=ParseMode.MARKDOWN,
-                            reply_markup=next_round_keyboard() if p == game.players[0] else None
+                            reply_markup=next_round_keyboard() if pl == game.players[0] else None
                         )
             else:
-                for p in game.players:
+                for pl in game.players:
                     await context.bot.send_message(
-                        chat_id=p, text=trick_msg, parse_mode=ParseMode.MARKDOWN
+                        chat_id=pl, text=trick_msg, parse_mode=ParseMode.MARKDOWN
                     )
-                # Next player's turn
                 next_pid = game.players[game.current_player_idx]
                 await _send_hand(context, game, next_pid)
-                for p in game.players:
-                    if p != next_pid:
+                for pl in game.players:
+                    if pl != next_pid:
                         await context.bot.send_message(
-                            chat_id=p,
+                            chat_id=pl,
                             text=f"⏳ Ход у *{game.player_names[next_pid]}*",
                             parse_mode=ParseMode.MARKDOWN
                         )
         else:
-            # Continue trick
             next_pid = game.players[game.current_player_idx]
             await _send_hand(context, game, next_pid)
-            for p in game.players:
-                if p != next_pid:
+            for pl in game.players:
+                if pl != next_pid:
                     await context.bot.send_message(
-                        chat_id=p,
+                        chat_id=pl,
                         text=f"⏳ Ход у *{game.player_names[next_pid]}*",
                         parse_mode=ParseMode.MARKDOWN
                     )
