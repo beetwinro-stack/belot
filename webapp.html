@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Белот</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1a6b3a;
+    background-image:
+      radial-gradient(ellipse at 50% 0%, #2d8f52 0%, #1a6b3a 60%),
+      repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.03) 10px, rgba(0,0,0,0.03) 11px);
+    min-height: 100vh;
+    color: #fff;
+    overflow-x: hidden;
+    user-select: none;
+  }
+
+  /* ── Header ─────────────────────────────────────────── */
+  #header {
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(8px);
+    padding: 10px 14px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  #round-info { font-size: 13px; opacity: 0.75; }
+  #trump-display {
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #trump-suit { font-size: 22px; }
+  #tricks-count { font-size: 13px; opacity: 0.8; }
+
+  /* ── Scores ─────────────────────────────────────────── */
+  #scores {
+    display: flex;
+    gap: 8px;
+    padding: 8px 14px;
+    background: rgba(0,0,0,0.2);
+  }
+  .score-team {
+    flex: 1;
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    padding: 7px 10px;
+    border-left: 3px solid #4a90d9;
+  }
+  .score-team.red { border-left-color: #e05050; }
+  .score-team .names { font-size: 11px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .score-team .pts { font-size: 20px; font-weight: 700; }
+  .score-bar { height: 3px; background: rgba(255,255,255,0.15); border-radius: 2px; margin-top: 4px; }
+  .score-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #4a90d9, #74bcff); transition: width 0.5s; }
+  .score-team.red .score-bar-fill { background: linear-gradient(90deg, #e05050, #ff8080); }
+
+  /* ── Table (current trick) ──────────────────────────── */
+  #table-area {
+    padding: 10px 14px 6px;
+    min-height: 110px;
+  }
+  #table-label { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  #trick-cards {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    min-height: 90px;
+  }
+  .trick-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .trick-name { font-size: 10px; opacity: 0.7; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── Status message ─────────────────────────────────── */
+  #status-bar {
+    text-align: center;
+    padding: 6px 14px;
+    font-size: 13px;
+    min-height: 28px;
+    opacity: 0.9;
+  }
+  #status-bar.my-turn { color: #ffe066; font-weight: 600; }
+  #status-bar.waiting { color: rgba(255,255,255,0.6); }
+
+  /* ── Hand area ──────────────────────────────────────── */
+  #hand-label {
+    font-size: 11px;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 0 14px 4px;
+  }
+  #hand-area {
+    padding: 0 8px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #hand-cards {
+    display: flex;
+    gap: 6px;
+    padding: 8px 4px 12px;
+    min-width: max-content;
+  }
+
+  /* ── Card SVG wrapper ───────────────────────────────── */
+  .card-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+    position: relative;
+  }
+  .card-wrap svg {
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
+    transition: filter 0.15s;
+  }
+  .card-wrap.valid:hover svg, .card-wrap.valid:active svg {
+    filter: drop-shadow(0 5px 12px rgba(255,220,50,0.5)) drop-shadow(0 3px 6px rgba(0,0,0,0.4));
+  }
+  .card-wrap.selected {
+    transform: translateY(-14px);
+  }
+  .card-wrap.selected svg {
+    filter: drop-shadow(0 8px 16px rgba(255,220,50,0.7)) drop-shadow(0 3px 6px rgba(0,0,0,0.4));
+  }
+  .card-wrap.invalid {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .card-wrap.trump-card svg {
+    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)) drop-shadow(0 0 4px rgba(255,200,0,0.3));
+  }
+
+  /* ── Action buttons ─────────────────────────────────── */
+  #action-area {
+    padding: 6px 14px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .action-btn:active { transform: scale(0.97); opacity: 0.85; }
+  .btn-primary { background: linear-gradient(135deg, #4CAF50, #2e7d32); color: #fff; }
+  .btn-pass { background: rgba(255,255,255,0.12); color: #fff; }
+  .btn-take { background: linear-gradient(135deg, #2196F3, #1565c0); color: #fff; }
+  .btn-danger { background: linear-gradient(135deg, #e53935, #b71c1c); color: #fff; }
+  .btn-suit { background: rgba(255,255,255,0.1); color: #fff; font-size: 18px; border-radius: 12px; padding: 12px; }
+  .suits-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  /* ── Confirm discard button ─────────────────────────── */
+  #confirm-discard-btn {
+    display: none;
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #e53935, #b71c1c);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 14px 32px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    z-index: 100;
+  }
+
+  /* ── Screens ─────────────────────────────────────────── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  #waiting-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+    gap: 14px;
+    padding: 24px;
+  }
+  .waiting-icon { font-size: 64px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+  .waiting-title { font-size: 22px; font-weight: 700; }
+  .waiting-sub { font-size: 14px; opacity: 0.7; text-align: center; }
+
+  #result-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 70vh;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+  }
+  .result-icon { font-size: 72px; }
+  .result-title { font-size: 28px; font-weight: 800; }
+  .result-sub { font-size: 15px; opacity: 0.8; }
+</style>
+</head>
+<body>
+
+<!-- Waiting for game to start -->
+<div id="waiting-screen" class="screen active">
+  <div class="waiting-icon">🃏</div>
+  <div class="waiting-title">Белот</div>
+  <div class="waiting-sub" id="waiting-msg">Загрузка...</div>
+</div>
+
+<!-- Main game screen -->
+<div id="game-screen" class="screen">
+  <!-- Header -->
+  <div id="header">
+    <div id="round-info">Раунд <span id="round-num">1</span></div>
+    <div id="trump-display">
+      <span>★</span>
+      <span id="trump-suit">?</span>
+    </div>
+    <div id="tricks-count">🔵<span id="tricks0">0</span> 🔴<span id="tricks1">0</span></div>
+  </div>
+
+  <!-- Scores -->
+  <div id="scores">
+    <div class="score-team" id="score-t0">
+      <div class="names" id="t0-names">Команда 1</div>
+      <div class="pts" id="t0-pts">0</div>
+      <div class="score-bar"><div class="score-bar-fill" id="t0-bar" style="width:0%"></div></div>
+    </div>
+    <div class="score-team red" id="score-t1">
+      <div class="names" id="t1-names">Команда 2</div>
+      <div class="pts" id="t1-pts">0</div>
+      <div class="score-bar"><div class="score-bar-fill" id="t1-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div id="table-area">
+    <div id="table-label">На столе</div>
+    <div id="trick-cards"></div>
+  </div>
+
+  <!-- Status -->
+  <div id="status-bar"></div>
+
+  <!-- Hand -->
+  <div id="hand-label">Ваши карты</div>
+  <div id="hand-area">
+    <div id="hand-cards"></div>
+  </div>
+
+  <!-- Action buttons (bidding, declarations etc.) -->
+  <div id="action-area"></div>
+</div>
+
+<!-- Round result screen -->
+<div id="result-screen" class="screen">
+  <div class="result-icon" id="result-icon">🏅</div>
+  <div class="result-title" id="result-title">Раунд завершён</div>
+  <div class="result-sub" id="result-sub"></div>
+</div>
+
+<button id="confirm-discard-btn" onclick="confirmDiscard()">🗑 Сбросить выбранные (0/2)</button>
+
+<script>
+// ── Telegram WebApp init ──────────────────────────────────────────────────
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+// ── State ─────────────────────────────────────────────────────────────────
+let state = null;
+let myId = null;
+let selectedDiscard = [];
+let selectedPlayCard = null;
+
+// ── SVG Card renderer ─────────────────────────────────────────────────────
+const SUIT_COLOR = { '♣': '#1a1a2e', '♠': '#1a1a2e', '♥': '#c0392b', '♦': '#c0392b' };
+const RANK_RU = { '7':'7','8':'8','9':'9','10':'10','J':'В','Q':'Д','K':'К','A':'Т' };
+
+function makeSuitSymbol(suit, size) {
+  // Returns SVG path/text for the suit at given font size
+  return `<text font-size="${size}" fill="${SUIT_COLOR[suit]}" text-anchor="middle">${suit}</text>`;
+}
+
+function makeCardSVG(rank, suit, options = {}) {
+  const { w = 64, h = 96, trump = false, selected = false, invalid = false, small = false } = options;
+  const color = SUIT_COLOR[suit] || '#1a1a2e';
+  const rankRu = RANK_RU[rank] || rank;
+
+  // Background
+  let bgFill = 'white';
+  let borderColor = trump ? '#f0c040' : '#ccc';
+  let borderWidth = trump ? 2.5 : 1.5;
+  let opacity = invalid ? 0.5 : 1;
+
+  // Trump shimmer bg
+  let extraBg = trump
+    ? `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="url(#tg)" opacity="0.3"/>`
+    : '';
+
+  const fontSize = small ? 10 : 13;
+  const suitSize = small ? 10 : 14;
+  const centerRankSize = small ? 18 : 26;
+  const centerSuitSize = small ? 20 : 28;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" opacity="${opacity}">
+  <defs>
+    ${trump ? `<linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffd700"/>
+      <stop offset="100%" stop-color="#ff8c00"/>
+    </linearGradient>` : ''}
+  </defs>
+  <!-- Shadow -->
+  <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.2)"/>
+  <!-- Card body -->
+  <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="${bgFill}" stroke="${borderColor}" stroke-width="${borderWidth}"/>
+  ${extraBg}
+  <!-- Top-left rank -->
+  <text x="5" y="${fontSize+2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}">${rankRu}</text>
+  <text x="5" y="${fontSize*2+4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}">${suit}</text>
+  <!-- Bottom-right (rotated) -->
+  <text x="${w-7}" y="${h-fontSize-2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${rankRu}</text>
+  <text x="${w-7}" y="${h-4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${suit}</text>
+  <!-- Center -->
+  <text x="${(w-2)/2}" y="${(h-2)/2-2}" font-size="${centerSuitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle" dominant-baseline="middle">${suit}</text>
+  <text x="${(w-2)/2}" y="${(h-2)/2+centerSuitSize/2+4}" font-size="${centerRankSize}" font-weight="900" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle">${rankRu}</text>
+  ${trump ? `<text x="${w-9}" y="12" font-size="10" fill="#f0c040" text-anchor="middle">★</text>` : ''}
+</svg>`;
+}
+
+function makeCardBackSVG(w = 64, h = 96) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.2)"/>
+  <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="#1a3a6b" stroke="#2a5aab" stroke-width="1.5"/>
+  <rect x="6" y="6" width="${w-16}" height="${h-16}" rx="5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <text x="${(w-2)/2}" y="${(h-2)/2+5}" font-size="28" text-anchor="middle" fill="rgba(255,255,255,0.3)">🃏</text>
+</svg>`;
+}
+
+// ── Render functions ──────────────────────────────────────────────────────
+function renderHand(hand, validIndices, trumpSuit, phase) {
+  const container = document.getElementById('hand-cards');
+  container.innerHTML = '';
+
+  if (!hand || hand.length === 0) {
+    container.innerHTML = '<div style="opacity:0.5;padding:20px">Нет карт</div>';
+    return;
+  }
+
+  hand.forEach((card, i) => {
+    const [rank, suit] = card;
+    const isTrump = suit === trumpSuit;
+    const isValid = validIndices === null || validIndices.includes(i);
+    const isSelected = (phase === 'discard' && selectedDiscard.includes(i)) ||
+                       (phase === 'play' && selectedPlayCard === i);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'card-wrap' +
+      (isValid ? ' valid' : ' invalid') +
+      (isTrump ? ' trump-card' : '') +
+      (isSelected ? ' selected' : '');
+
+    wrap.innerHTML = makeSVGCard(rank, suit, { trump: isTrump, invalid: !isValid, selected: isSelected });
+
+    if (isValid) {
+      wrap.onclick = () => onCardClick(i, phase);
+    } else {
+      wrap.onclick = () => tg.showAlert('Эту карту нельзя сыграть по правилам!');
+    }
+
+    container.appendChild(wrap);
+  });
+}
+
+function makeSVGCard(rank, suit, opts) {
+  const div = document.createElement('div');
+  div.innerHTML = makeCardSVG(rank, suit, opts);
+  return div.innerHTML;
+}
+
+function renderTrick(trick, playerNames, trumpSuit) {
+  const container = document.getElementById('trick-cards');
+  container.innerHTML = '';
+
+  if (!trick || trick.length === 0) {
+    container.innerHTML = '<div style="opacity:0.4;font-size:13px;padding:10px 0">Стол пуст</div>';
+    return;
+  }
+
+  trick.forEach(([pid, rank, suit]) => {
+    const isTrump = suit === trumpSuit;
+    const name = playerNames[pid] || '?';
+
+    const slot = document.createElement('div');
+    slot.className = 'trick-slot';
+    slot.innerHTML = `
+      ${makeCardSVG(rank, suit, { w: 56, h: 82, trump: isTrump })}
+      <div class="trick-name">${name}</div>
+    `;
+    container.appendChild(slot);
+  });
+}
+
+// ── State update ──────────────────────────────────────────────────────────
+function updateUI(s) {
+  state = s;
+
+  // Switch screens
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+
+  if (s.phase === 'waiting') {
+    document.getElementById('waiting-screen').classList.add('active');
+    document.getElementById('waiting-msg').textContent = s.message || 'Ожидаем игроков...';
+    return;
+  }
+
+  if (s.phase === 'result') {
+    document.getElementById('result-screen').classList.add('active');
+    document.getElementById('result-icon').textContent = s.win ? '🏆' : '😔';
+    document.getElementById('result-title').textContent = s.title || 'Раунд завершён';
+    document.getElementById('result-sub').textContent = s.message || '';
+    return;
+  }
+
+  document.getElementById('game-screen').classList.add('active');
+
+  // Header
+  document.getElementById('round-num').textContent = s.round || 1;
+  document.getElementById('trump-suit').textContent = s.trump || '?';
+  document.getElementById('tricks0').textContent = s.tricks ? s.tricks[0] : 0;
+  document.getElementById('tricks1').textContent = s.tricks ? s.tricks[1] : 0;
+
+  // Scores
+  const target = 151;
+  document.getElementById('t0-names').textContent = s.team0_name || 'Команда 1';
+  document.getElementById('t1-names').textContent = s.team1_name || 'Команда 2';
+  document.getElementById('t0-pts').textContent = s.scores ? s.scores[0] : 0;
+  document.getElementById('t1-pts').textContent = s.scores ? s.scores[1] : 0;
+  document.getElementById('t0-bar').style.width = Math.min(100, ((s.scores||[0,0])[0] / target * 100)) + '%';
+  document.getElementById('t1-bar').style.width = Math.min(100, ((s.scores||[0,0])[1] / target * 100)) + '%';
+
+  // Trick
+  renderTrick(s.trick || [], s.player_names || {}, s.trump);
+
+  // Status
+  const statusEl = document.getElementById('status-bar');
+  if (s.is_my_turn) {
+    statusEl.textContent = '🎯 Ваш ход!';
+    statusEl.className = 'my-turn';
+  } else {
+    statusEl.textContent = s.waiting_for ? `⏳ Ход у ${s.waiting_for}` : '';
+    statusEl.className = 'waiting';
+  }
+
+  // Hand
+  document.getElementById('hand-label').style.display = s.hand ? 'block' : 'none';
+  if (s.hand) {
+    renderHand(s.hand, s.valid_indices, s.trump, s.phase);
+  }
+
+  // Actions
+  renderActions(s);
+}
+
+function renderActions(s) {
+  const area = document.getElementById('action-area');
+  area.innerHTML = '';
+  document.getElementById('confirm-discard-btn').style.display = 'none';
+
+  if (s.phase === 'bid1') {
+    area.innerHTML = `
+      <button class="action-btn btn-take" onclick="sendAction('bid_take', 'proposed')">
+        ✅ Взять ${s.trump} ${s.trump_name}
+      </button>
+      <button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>
+    `;
+  } else if (s.phase === 'bid2') {
+    const suits = [['♣','Трефы'],['♦','Бубны'],['♥','Червы'],['♠','Пики']];
+    const others = suits.filter(([sv]) => sv !== s.proposed_suit);
+    area.innerHTML = `<div class="suits-grid">` +
+      others.map(([sv, sn]) => `
+        <button class="action-btn btn-suit" onclick="sendAction('bid_take', '${sv}')">
+          ${sv} ${sn}
+        </button>`).join('') +
+      `</div>
+      <button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>`;
+  } else if (s.phase === 'declare') {
+    area.innerHTML = `
+      <button class="action-btn btn-primary" onclick="sendAction('declare')">
+        📣 Заявить комбинации
+      </button>
+    `;
+    if (s.declarations && s.declarations.length) {
+      const declHtml = s.declarations.map(d => `<div style="font-size:13px;opacity:0.8">📌 ${d}</div>`).join('');
+      area.innerHTML = `<div style="padding:8px 0;display:flex;flex-direction:column;gap:4px">${declHtml}</div>` + area.innerHTML;
+    } else {
+      area.innerHTML = `<div style="font-size:13px;opacity:0.6;padding:4px 0">Комбинаций нет</div>` + area.innerHTML;
+    }
+  } else if (s.phase === 'discard') {
+    selectedDiscard = [];
+    updateDiscardBtn();
+    document.getElementById('confirm-discard-btn').style.display = 'block';
+    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">
+      Нажмите на 2 карты чтобы сбросить их
+    </div>`;
+  } else if (s.phase === 'play' && s.is_my_turn) {
+    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">
+      Нажмите на карту чтобы сыграть её
+    </div>`;
+  }
+}
+
+// ── Card click handlers ───────────────────────────────────────────────────
+function onCardClick(index, phase) {
+  if (phase === 'discard') {
+    if (selectedDiscard.includes(index)) {
+      selectedDiscard = selectedDiscard.filter(i => i !== index);
+    } else if (selectedDiscard.length < 2) {
+      selectedDiscard.push(index);
+    } else {
+      tg.showAlert('Уже выбрано 2 карты. Снимите выбор с одной.');
+      return;
+    }
+    updateDiscardBtn();
+    renderHand(state.hand, null, state.trump, 'discard');
+  } else if (phase === 'play' && state.is_my_turn) {
+    selectedPlayCard = index;
+    renderHand(state.hand, state.valid_indices, state.trump, 'play');
+    // Small delay for visual feedback
+    setTimeout(() => sendAction('play', index), 180);
+  }
+}
+
+function updateDiscardBtn() {
+  const btn = document.getElementById('confirm-discard-btn');
+  btn.textContent = `🗑 Сбросить выбранные (${selectedDiscard.length}/2)`;
+  btn.style.opacity = selectedDiscard.length === 2 ? '1' : '0.5';
+}
+
+function confirmDiscard() {
+  if (selectedDiscard.length !== 2) {
+    tg.showAlert('Выберите ровно 2 карты для сброса!');
+    return;
+  }
+  sendAction('discard', selectedDiscard.join(','));
+}
+
+// ── Communication with bot ────────────────────────────────────────────────
+function sendAction(action, data) {
+  const payload = JSON.stringify({ action, data: data !== undefined ? String(data) : null });
+  tg.sendData(payload);
+}
+
+// ── Init from URL ─────────────────────────────────────────────────────────
+function initFromUrl() {
+  // State passed as base64 JSON in the hash
+  const hash = window.location.hash.slice(1);
+  if (hash) {
+    try {
+      const decoded = JSON.parse(atob(hash));
+      myId = decoded.my_id;
+      updateUI(decoded);
+      return;
+    } catch(e) {
+      console.error('Failed to parse state from hash:', e);
+    }
+  }
+
+  // Fallback: waiting screen
+  updateUI({ phase: 'waiting', message: 'Откройте мини-приложение через кнопку в игре' });
+}
+
+initFromUrl();
+</script>
+</body>
+</html>
