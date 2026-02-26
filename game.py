@@ -1,16 +1,12 @@
 """
 Core Belot game state and logic (Moldova / belot.md rules)
 
-Game flow:
-1. 4 players, 2 teams (0+2 vs 1+3)
-2. Deal 5 cards each, flip top card → propose as trump
-3. Bidding: each player can "take" or "pass" (round 1: only proposed suit)
-4. If all pass → round 2: any suit or "pass"
-5. If Valet is flipped → next player MUST take, trump = valet's suit
-6. After trump chosen → deal 3 more cards each (total 8 per player)
-7. Declarations announced before first trick
-8. 8 tricks played, score counted
-9. Game to 151+ points
+Supports 3-player and 4-player modes.
+
+4-player: 2 fixed teams (0+2 vs 1+3), 8 cards each, 8 tricks
+3-player: dynamic teams — taker (alone) vs other two, 10 cards each, 10 tricks
+  - Deal 10 cards each (30 total), 2 extra go to taker after bidding
+  - Taker must discard 2 cards before declarations
 """
 import random
 from cards import Card, Suit, Rank, Deck
@@ -23,6 +19,7 @@ from declarations import (
 class GameState:
     WAITING = "waiting"
     BIDDING = "bidding"
+    DISCARDING = "discarding"     # 3-player only: taker picks 2 cards to discard
     DECLARATIONS = "declarations"
     PLAYING = "playing"
     ROUND_END = "round_end"
@@ -30,47 +27,48 @@ class GameState:
 
 
 class BelotGame:
-    def __init__(self, game_id: str):
+    def __init__(self, game_id: str, max_players: int = 4):
         self.game_id = game_id
-        self.players = []          # list of player_ids (Telegram user IDs)
-        self.player_names = {}     # player_id -> display name
+        self.max_players = max_players   # 3 or 4
+        self.players = []
+        self.player_names = {}
         self.state = GameState.WAITING
 
-        # Teams: team 0 = players[0] + players[2], team 1 = players[1] + players[3]
-        self.scores = [0, 0]       # total game score per team
-        self.round_scores = [0, 0] # current round score
+        self.scores = [0, 0]
+        self.round_scores = [0, 0]
 
-        # Deck and hands
-        self.hands = {}            # player_id -> list of Card
+        self.hands = {}
         self.deck = None
 
         # Bidding
-        self.proposed_card = None  # The flipped card in round 1
+        self.proposed_card = None
         self.trump_suit = None
-        self.bidding_round = 1     # 1 or 2
-        self.current_bidder_idx = 0  # index into self.players
-        self.taker_idx = None      # index of player who took trump
-        self.auto_trump = False    # True if Valet was flipped
+        self.bidding_round = 1
+        self.current_bidder_idx = 0
+        self.taker_idx = None
+        self.auto_trump = False
+
+        # 3-player: extra cards for taker
+        self.extra_cards = []          # 2 cards dealt to taker in 3p mode
 
         # Declarations
-        self.all_declarations = {} # player_id -> list of decl dicts
-        self.declaration_scores = [0, 0]  # bonus from declarations
-        self.declarations_done = set()    # player_ids who submitted
-        self.belot_announced = {}  # player_id -> bool (K+Q of trump)
-        self.belot_score_given = {} # player_id -> bool
+        self.all_declarations = {}
+        self.declaration_scores = [0, 0]
+        self.declarations_done = set()
+        self.belot_announced = {}
+        self.belot_score_given = {}
 
         # Tricks
-        self.current_trick = []    # list of (player_id, Card)
+        self.current_trick = []
         self.trick_winner_idx = None
-        self.tricks_won = [0, 0]   # per team
+        self.tricks_won = [0, 0]
         self.tricks_history = []
-        self.current_player_idx = 0  # index into players for current turn
+        self.current_player_idx = 0
 
         # Special rules
-        self.eight_eight_eight_eight = False  # 8888 found
-        self.seven_seven_seven_seven = False  # 7777 found
+        self.eight_eight_eight_eight = False
+        self.seven_seven_seven_seven = False
 
-        # Round number
         self.round_num = 0
         self.dealer_idx = 0
 
@@ -78,26 +76,41 @@ class BelotGame:
     def num_players(self):
         return len(self.players)
 
+    @property
+    def total_tricks(self):
+        """Number of tricks in a round."""
+        return 10 if self.max_players == 3 else 8
+
     def team_of(self, player_id) -> int:
+        """
+        4-player: teams are fixed (positions 0+2 vs 1+3).
+        3-player: taker = team 0, others = team 1. Dynamic after bidding.
+        """
         idx = self.players.index(player_id)
-        return idx % 2
+        return self.team_of_idx(idx)
 
     def team_of_idx(self, idx) -> int:
-        return idx % 2
+        if self.max_players == 4:
+            return idx % 2
+        # 3-player: taker_idx is team 0
+        if self.taker_idx is None:
+            return idx % 2   # fallback before bidding resolved
+        return 0 if idx == self.taker_idx else 1
 
     def partner_of(self, player_id):
+        """4-player only."""
         idx = self.players.index(player_id)
         return self.players[(idx + 2) % 4]
 
     def add_player(self, player_id: int, name: str) -> bool:
-        if player_id in self.players or len(self.players) >= 4:
+        if player_id in self.players or len(self.players) >= self.max_players:
             return False
         self.players.append(player_id)
         self.player_names[player_id] = name
         return True
 
     def is_full(self) -> bool:
-        return len(self.players) == 4
+        return len(self.players) == self.max_players
 
     def start_round(self):
         """Deal cards and start bidding."""
@@ -118,31 +131,43 @@ class BelotGame:
         self.eight_eight_eight_eight = False
         self.seven_seven_seven_seven = False
         self.bidding_round = 1
+        self.extra_cards = []
 
-        # Deal 5 cards each
         self.deck = Deck()
         self.deck.shuffle()
         self.hands = {}
-        for p in self.players:
-            self.hands[p] = self.deck.deal(5)
 
-        # Flip top card
+        if self.max_players == 3:
+            # Deal 10 cards each, 2 extra stay in deck for taker
+            for p in self.players:
+                self.hands[p] = self.deck.deal(10)
+            # Store 2 extra cards (will go to taker after bidding)
+            self.extra_cards = self.deck.deal(2)
+        else:
+            # 4-player: deal 5 cards each
+            for p in self.players:
+                self.hands[p] = self.deck.deal(5)
+
         self.proposed_card = self.deck.top_card()
+        self.current_bidder_idx = (self.dealer_idx + 1) % self.max_players
 
-        # Next player after dealer starts bidding
-        self.current_bidder_idx = (self.dealer_idx + 1) % 4
-
-        # Special rule: if proposed card is Valet → auto take
-        if self.proposed_card.rank == Rank.JACK:
+        # Special rule: Valet flipped → auto take
+        if self.proposed_card and self.proposed_card.rank == Rank.JACK:
             self.auto_trump = True
             self.trump_suit = self.proposed_card.suit
             self.taker_idx = self.current_bidder_idx
-            self._deal_remaining()
-            self.state = GameState.DECLARATIONS
-            self.current_player_idx = (self.dealer_idx + 1) % 4
+            if self.max_players == 4:
+                self._deal_remaining_4p()
+                self.state = GameState.DECLARATIONS
+            else:
+                # 3p: taker gets extra cards, must discard
+                taker_id = self.players[self.taker_idx]
+                self.hands[taker_id].extend(self.extra_cards)
+                self.extra_cards = []
+                self.state = GameState.DISCARDING
+            self.current_player_idx = (self.dealer_idx + 1) % self.max_players
 
     def bid_take(self, player_id: int, suit: Suit = None) -> dict:
-        """Player takes trump. suit=None in round 1 (takes proposed suit)."""
         player_idx = self.players.index(player_id)
         if player_idx != self.current_bidder_idx:
             return {"ok": False, "error": "Not your turn to bid"}
@@ -157,47 +182,71 @@ class BelotGame:
             self.trump_suit = suit
 
         self.taker_idx = player_idx
-        self._deal_remaining()
-        self.state = GameState.DECLARATIONS
-        self.current_player_idx = (self.dealer_idx + 1) % 4
+
+        if self.max_players == 4:
+            self._deal_remaining_4p()
+            self.state = GameState.DECLARATIONS
+        else:
+            # 3-player: give taker the 2 extra cards, then they discard 2
+            taker_id = self.players[self.taker_idx]
+            self.hands[taker_id].extend(self.extra_cards)
+            self.extra_cards = []
+            self.state = GameState.DISCARDING
+
+        self.current_player_idx = (self.dealer_idx + 1) % self.max_players
         return {"ok": True, "trump": self.trump_suit}
 
     def bid_pass(self, player_id: int) -> dict:
-        """Player passes."""
         player_idx = self.players.index(player_id)
         if player_idx != self.current_bidder_idx:
             return {"ok": False, "error": "Not your turn to bid"}
 
-        next_idx = (self.current_bidder_idx + 1) % 4
+        next_idx = (self.current_bidder_idx + 1) % self.max_players
 
-        # Check if we've gone around
-        if next_idx == (self.dealer_idx + 1) % 4:
-            # Completed a round of bidding
+        if next_idx == (self.dealer_idx + 1) % self.max_players:
             if self.bidding_round == 1:
                 self.bidding_round = 2
-                self.current_bidder_idx = (self.dealer_idx + 1) % 4
+                self.current_bidder_idx = (self.dealer_idx + 1) % self.max_players
                 return {"ok": True, "round2": True}
             else:
-                # Everyone passed twice → redeal
-                self.dealer_idx = (self.dealer_idx + 1) % 4
+                self.dealer_idx = (self.dealer_idx + 1) % self.max_players
                 return {"ok": True, "redeal": True}
         else:
             self.current_bidder_idx = next_idx
             return {"ok": True}
 
-    def _deal_remaining(self):
-        """Deal 3 more cards to each player after trump is chosen."""
+    def discard_cards(self, player_id: int, indices: list) -> dict:
+        """3-player only: taker discards exactly 2 cards."""
+        if self.state != GameState.DISCARDING:
+            return {"ok": False, "error": "Not in discarding phase"}
+        taker_id = self.players[self.taker_idx]
+        if player_id != taker_id:
+            return {"ok": False, "error": "Only the taker discards"}
+        if len(indices) != 2:
+            return {"ok": False, "error": "Must discard exactly 2 cards"}
+
+        hand = self.hands[player_id]
+        if any(i >= len(hand) for i in indices):
+            return {"ok": False, "error": "Invalid card index"}
+
+        # Remove by index (highest first to not shift)
+        for i in sorted(set(indices), reverse=True):
+            hand.pop(i)
+
+        self.state = GameState.DECLARATIONS
+        return {"ok": True}
+
+    def _deal_remaining_4p(self):
+        """Deal 3 more cards to each player (4-player mode)."""
         for p in self.players:
             self.hands[p].extend(self.deck.deal(3))
 
     def submit_declarations(self, player_id: int) -> dict:
-        """Player submits (or skips) declarations."""
         if player_id in self.declarations_done:
             return {"ok": False, "error": "Already submitted"}
 
         decls = get_all_declarations(self.hands[player_id], self.trump_suit)
 
-        # Check special cards
         if has_8888(self.hands[player_id]):
             self.eight_eight_eight_eight = True
         if has_7777(self.hands[player_id]):
@@ -207,55 +256,45 @@ class BelotGame:
         self.declarations_done.add(player_id)
         self.belot_announced[player_id] = check_belot(self.hands[player_id], self.trump_suit)
 
-        if len(self.declarations_done) == 4:
+        if len(self.declarations_done) == self.max_players:
             self._resolve_declarations()
             self.state = GameState.PLAYING
             return {"ok": True, "all_done": True, "scores": self.declaration_scores}
 
-        return {"ok": True, "waiting": 4 - len(self.declarations_done)}
+        return {"ok": True, "waiting": self.max_players - len(self.declarations_done)}
 
     def _resolve_declarations(self):
-        """Calculate declaration scores."""
-        # 8888 cancels all except Belot and 7777
         if self.eight_eight_eight_eight:
             for pid in self.players:
                 self.all_declarations[pid] = [
                     d for d in self.all_declarations.get(pid, [])
                     if d['type'] == 'belot'
                 ]
-            # 8888 holder gets their declarations back
-            # (8888 itself scores nothing per rules)
 
-        # Find which player has the best declaration
         decls_list = [(self.players.index(pid), decls)
                       for pid, decls in self.all_declarations.items() if decls]
-        
+
         if decls_list:
             best_player_idx = compare_declarations(decls_list)
             winning_team = self.team_of_idx(best_player_idx)
-            
-            # Only the winning team gets their declaration points
             for pid in self.players:
                 pidx = self.players.index(pid)
                 if self.team_of_idx(pidx) == winning_team:
                     for d in self.all_declarations.get(pid, []):
                         self.declaration_scores[winning_team] += d['score']
 
-        # Belot (K+Q of trump) - always counted regardless, announced during play
         for pid in self.players:
             self.belot_score_given[pid] = False
 
     def get_valid_cards(self, player_id: int) -> list:
-        """Get list of cards the player can legally play."""
         hand = self.hands[player_id]
         if not self.current_trick:
-            return hand[:]  # Lead: any card
+            return hand[:]
 
         lead_card = self.current_trick[0][1]
         lead_suit = lead_card.suit
         trump = self.trump_suit
 
-        # Find current winning card
         winning_card = self.current_trick[0][1]
         winning_player_idx = self.players.index(self.current_trick[0][0])
         for pid, card in self.current_trick[1:]:
@@ -264,38 +303,30 @@ class BelotGame:
                 winning_player_idx = self.players.index(pid)
 
         player_idx = self.players.index(player_id)
-        partner_winning = (winning_player_idx % 2 == player_idx % 2)
+        partner_winning = (winning_player_idx % 2 == player_idx % 2) if self.max_players == 4 else \
+                          (self.team_of_idx(winning_player_idx) == self.team_of_idx(player_idx))
 
-        # Cards of lead suit in hand
         lead_cards = [c for c in hand if c.suit == lead_suit]
         trump_cards = [c for c in hand if c.suit == trump]
-        
-        # Must follow suit if possible
+
         if lead_cards:
             if lead_suit == trump:
-                # Trump was led - must play higher trump if possible
                 higher = [c for c in lead_cards if c.trump_order() > winning_card.trump_order()]
                 return higher if higher else lead_cards
             return lead_cards
 
-        # Can't follow suit
         if partner_winning:
-            # Partner is winning → not obliged to cut
             return hand[:]
-        
-        # Must cut (play trump) if possible
+
         if trump_cards:
-            # Must play higher trump if possible
             if winning_card.suit == trump:
                 higher = [c for c in trump_cards if c.trump_order() > winning_card.trump_order()]
                 return higher if higher else trump_cards
             return trump_cards
 
-        # Can't cut either → any card
         return hand[:]
 
     def play_card(self, player_id: int, card: Card) -> dict:
-        """Player plays a card."""
         if self.state != GameState.PLAYING:
             return {"ok": False, "error": "Not in playing phase"}
 
@@ -307,29 +338,25 @@ class BelotGame:
         if card not in valid:
             return {"ok": False, "error": "Invalid card (rule violation)"}
 
-        # Check Belot announcement (K or Q of trump)
         if self.belot_announced.get(player_id) and not self.belot_score_given.get(player_id):
             if card.suit == self.trump_suit and card.rank in (Rank.KING, Rank.QUEEN):
                 team = self.team_of(player_id)
                 self.declaration_scores[team] += 20
                 self.belot_score_given[player_id] = True
 
-        # Remove card from hand
         self.hands[player_id].remove(card)
         self.current_trick.append((player_id, card))
 
         result = {"ok": True, "card": card}
 
-        if len(self.current_trick) == 4:
-            # Resolve trick
+        if len(self.current_trick) == self.max_players:
             result.update(self._resolve_trick())
         else:
-            self.current_player_idx = (self.current_player_idx + 1) % 4
+            self.current_player_idx = (self.current_player_idx + 1) % self.max_players
 
         return result
 
     def _resolve_trick(self) -> dict:
-        """Determine trick winner, add points, prepare for next trick."""
         lead_suit = self.current_trick[0][1].suit
         trump = self.trump_suit
 
@@ -340,10 +367,9 @@ class BelotGame:
                 best_pid = pid
 
         winner_idx = self.players.index(best_pid)
-        winning_team = winner_idx % 2
+        winning_team = self.team_of_idx(winner_idx)
         self.tricks_won[winning_team] += 1
 
-        # Add card points
         trick_pts = sum(card.points(trump) for _, card in self.current_trick)
         self.round_scores[winning_team] += trick_pts
 
@@ -362,38 +388,31 @@ class BelotGame:
             "trick_pts": trick_pts,
         }
 
-        # Check if round is done (all 8 tricks played)
-        if sum(self.tricks_won) == 8:
+        if sum(self.tricks_won) == self.total_tricks:
             result.update(self._end_round())
 
         return result
 
     def _end_round(self) -> dict:
-        """Calculate round scores and update game scores."""
         self.state = GameState.ROUND_END
         trump = self.trump_suit
 
-        # Last trick bonus = 10 points
         last_winner = self.tricks_history[-1]["winner"]
         last_team = self.team_of(last_winner)
         self.round_scores[last_team] += 10
 
-        # Все взятки = "белот" (match bonus) = extra 90 pts → total 252
         for team in [0, 1]:
-            if self.tricks_won[team] == 8:
+            if self.tricks_won[team] == self.total_tricks:
                 self.round_scores[team] += 90
 
-        # Add declaration bonuses
         for team in [0, 1]:
             self.round_scores[team] += self.declaration_scores[team]
 
-        # 7777 check: cancel the round
         if self.seven_seven_seven_seven:
-            self.dealer_idx = (self.dealer_idx + 1) % 4
-            return {"round_cancelled": True, "reason": "7777 - четыре семёрки!"}
+            self.dealer_idx = (self.dealer_idx + 1) % self.max_players
+            return {"round_cancelled": True, "reason": "7777 — четыре семёрки!"}
 
-        # Determine if taker's team made contract
-        taker_team = self.taker_idx % 2
+        taker_team = self.taker_idx % 2 if self.max_players == 4 else 0
         opponent_team = 1 - taker_team
 
         taker_pts = self.round_scores[taker_team]
@@ -401,24 +420,19 @@ class BelotGame:
 
         outcome = ""
         if taker_pts > opp_pts:
-            # Normal: each team keeps their points
             self.scores[taker_team] += taker_pts
             self.scores[opponent_team] += opp_pts
             outcome = "taker_wins"
         elif taker_pts == opp_pts:
-            # Tie: taker gets 0, opponent gets their points + taker's reserved for next round
             self.scores[opponent_team] += opp_pts
-            # taker_pts are suspended (not added this round - simplified: add to next)
             outcome = "tie"
         else:
-            # Taker failed: ALL points go to opponent
             total = taker_pts + opp_pts
             self.scores[opponent_team] += total
             outcome = "taker_failed"
 
-        self.dealer_idx = (self.dealer_idx + 1) % 4
+        self.dealer_idx = (self.dealer_idx + 1) % self.max_players
 
-        # Check game end (151+)
         game_over = False
         winner_team = None
         for team in [0, 1]:
@@ -448,5 +462,6 @@ class BelotGame:
             "scores": self.scores[:],
             "round_num": self.round_num,
             "trump": self.trump_suit.value if self.trump_suit else None,
+            "max_players": self.max_players,
             "current_player": self.players[self.current_player_idx] if self.state == GameState.PLAYING else None,
         }

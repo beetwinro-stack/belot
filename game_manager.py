@@ -7,19 +7,18 @@ from game import BelotGame, GameState
 
 class GameManager:
     def __init__(self):
-        self.games = {}           # game_id -> BelotGame
-        self.player_to_game = {}  # player_id -> game_id
+        self.games = {}
+        self.player_to_game = {}
 
-    def create_game(self, creator_id: int, creator_name: str) -> BelotGame:
+    def create_game(self, creator_id: int, creator_name: str, max_players: int = 4) -> BelotGame:
         game_id = str(uuid.uuid4())[:8].upper()
-        game = BelotGame(game_id)
+        game = BelotGame(game_id, max_players=max_players)
         game.add_player(creator_id, creator_name)
         self.games[game_id] = game
         self.player_to_game[creator_id] = game_id
         return game
 
     def join_game(self, game_id: str, player_id: int, player_name: str) -> tuple:
-        """Returns (game, error_message)."""
         game = self.games.get(game_id)
         if not game:
             return None, "Игра не найдена. Проверьте код игры."
@@ -28,7 +27,7 @@ class GameManager:
         if player_id in game.players:
             return None, "Вы уже в этой игре."
         if game.is_full():
-            return None, "Игра заполнена (4/4 игроков)."
+            return None, f"Игра заполнена ({game.max_players}/{game.max_players} игроков)."
 
         if player_id in self.player_to_game:
             old_gid = self.player_to_game[player_id]
