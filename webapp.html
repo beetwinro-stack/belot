@@ -31,29 +31,18 @@
     border-bottom: 1px solid rgba(255,255,255,0.1);
   }
   #round-info { font-size: 13px; opacity: 0.75; }
-  #trump-display {
-    font-size: 18px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  #trump-display { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
   #trump-suit { font-size: 22px; }
   #tricks-count { font-size: 13px; opacity: 0.8; }
 
   /* ── Scores ─────────────────────────────────────────── */
   #scores {
-    display: flex;
-    gap: 8px;
-    padding: 8px 14px;
+    display: flex; gap: 8px; padding: 8px 14px;
     background: rgba(0,0,0,0.2);
   }
   .score-team {
-    flex: 1;
-    background: rgba(0,0,0,0.25);
-    border-radius: 10px;
-    padding: 7px 10px;
-    border-left: 3px solid #4a90d9;
+    flex: 1; background: rgba(0,0,0,0.25); border-radius: 10px;
+    padding: 7px 10px; border-left: 3px solid #4a90d9;
   }
   .score-team.red { border-left-color: #e05050; }
   .score-team .names { font-size: 11px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -63,102 +52,41 @@
   .score-team.red .score-bar-fill { background: linear-gradient(90deg, #e05050, #ff8080); }
 
   /* ── Table (current trick) ──────────────────────────── */
-  #table-area {
-    padding: 10px 14px 6px;
-    min-height: 110px;
-  }
+  #table-area { padding: 10px 14px 6px; min-height: 110px; }
   #table-label { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-  #trick-cards {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-    min-height: 90px;
-  }
-  .trick-slot {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-  }
+  #trick-cards { display: flex; gap: 8px; align-items: flex-end; min-height: 90px; }
+  .trick-slot { display: flex; flex-direction: column; align-items: center; gap: 3px; }
   .trick-name { font-size: 10px; opacity: 0.7; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ── Status message ─────────────────────────────────── */
-  #status-bar {
-    text-align: center;
-    padding: 6px 14px;
-    font-size: 13px;
-    min-height: 28px;
-    opacity: 0.9;
-  }
+  #status-bar { text-align: center; padding: 6px 14px; font-size: 13px; min-height: 28px; opacity: 0.9; }
   #status-bar.my-turn { color: #ffe066; font-weight: 600; }
   #status-bar.waiting { color: rgba(255,255,255,0.6); }
 
   /* ── Hand area ──────────────────────────────────────── */
-  #hand-label {
-    font-size: 11px;
-    opacity: 0.6;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 0 14px 4px;
-  }
-  #hand-area {
-    padding: 0 8px 16px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  #hand-cards {
-    display: flex;
-    gap: 6px;
-    padding: 8px 4px 12px;
-    min-width: max-content;
-  }
+  #hand-label { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; padding: 0 14px 4px; }
+  #hand-area { padding: 0 8px 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #hand-cards { display: flex; gap: 6px; padding: 8px 4px 12px; min-width: max-content; }
 
   /* ── Card SVG wrapper ───────────────────────────────── */
   .card-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    transition: transform 0.15s ease;
-    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; cursor: pointer; transition: transform 0.15s ease; position: relative;
   }
-  .card-wrap svg {
-    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));
-    transition: filter 0.15s;
-  }
+  .card-wrap svg { filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)); transition: filter 0.15s; }
   .card-wrap.valid:hover svg, .card-wrap.valid:active svg {
     filter: drop-shadow(0 5px 12px rgba(255,220,50,0.5)) drop-shadow(0 3px 6px rgba(0,0,0,0.4));
   }
-  .card-wrap.selected {
-    transform: translateY(-14px);
-  }
-  .card-wrap.selected svg {
-    filter: drop-shadow(0 8px 16px rgba(255,220,50,0.7)) drop-shadow(0 3px 6px rgba(0,0,0,0.4));
-  }
-  .card-wrap.invalid {
-    opacity: 0.45;
-    cursor: default;
-  }
-  .card-wrap.trump-card svg {
-    filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)) drop-shadow(0 0 4px rgba(255,200,0,0.3));
-  }
+  .card-wrap.selected { transform: translateY(-14px); }
+  .card-wrap.selected svg { filter: drop-shadow(0 8px 16px rgba(255,220,50,0.7)) drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
+  .card-wrap.invalid { opacity: 0.45; cursor: default; }
+  .card-wrap.trump-card svg { filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)) drop-shadow(0 0 4px rgba(255,200,0,0.3)); }
 
   /* ── Action buttons ─────────────────────────────────── */
-  #action-area {
-    padding: 6px 14px 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  #action-area { padding: 6px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
   .action-btn {
-    width: 100%;
-    padding: 13px;
-    border: none;
-    border-radius: 12px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
+    width: 100%; padding: 13px; border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
     transition: opacity 0.15s, transform 0.1s;
   }
   .action-btn:active { transform: scale(0.97); opacity: 0.85; }
@@ -171,50 +99,161 @@
 
   /* ── Confirm discard button ─────────────────────────── */
   #confirm-discard-btn {
-    display: none;
-    position: fixed;
-    bottom: 16px;
-    left: 50%;
+    display: none; position: fixed; bottom: 16px; left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(135deg, #e53935, #b71c1c);
-    color: #fff;
-    border: none;
-    border-radius: 14px;
-    padding: 14px 32px;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    z-index: 100;
+    color: #fff; border: none; border-radius: 14px; padding: 14px 32px;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4); z-index: 100;
   }
 
   /* ── Screens ─────────────────────────────────────────── */
   .screen { display: none; }
   .screen.active { display: block; }
 
-  #waiting-screen {
-    display: flex;
+  /* ── Lobby screen ───────────────────────────────────── */
+  #lobby-screen {
+    display: none;
     flex-direction: column;
+    min-height: 100vh;
+  }
+  #lobby-screen.active { display: flex; }
+
+  .lobby-header {
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    text-align: center;
+  }
+  .lobby-header .logo { font-size: 36px; margin-bottom: 4px; }
+  .lobby-header h1 { font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+  .lobby-header p { font-size: 12px; opacity: 0.6; margin-top: 2px; }
+
+  .lobby-body { flex: 1; padding: 14px; overflow-y: auto; }
+
+  .lobby-section-title {
+    font-size: 11px; opacity: 0.6; text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .lobby-section-title::after {
+    content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.15);
+  }
+
+  .table-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 10px;
+    display: flex;
     align-items: center;
-    justify-content: center;
-    min-height: 70vh;
-    gap: 14px;
-    padding: 24px;
+    gap: 12px;
+    transition: background 0.15s;
+    cursor: pointer;
+  }
+  .table-card:active { background: rgba(0,0,0,0.5); }
+  .table-card:hover { background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.2); }
+
+  .table-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: linear-gradient(135deg, #2e7d32, #1b5e20);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; flex-shrink: 0;
+  }
+  .table-info { flex: 1; min-width: 0; }
+  .table-id { font-size: 16px; font-weight: 700; font-family: monospace; letter-spacing: 2px; }
+  .table-players { font-size: 12px; opacity: 0.7; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .table-mode { font-size: 11px; opacity: 0.5; margin-top: 2px; }
+
+  .table-slots {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;
+  }
+  .slots-badge {
+    background: rgba(255,255,255,0.1);
+    border-radius: 20px; padding: 3px 10px;
+    font-size: 12px; font-weight: 600;
+  }
+  .slots-badge.open { background: rgba(76,175,80,0.3); color: #81c784; }
+  .slots-badge.full { background: rgba(229,57,53,0.3); color: #e57373; }
+
+  .join-btn {
+    background: linear-gradient(135deg, #4CAF50, #2e7d32);
+    border: none; color: #fff; border-radius: 10px;
+    padding: 7px 16px; font-size: 13px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .join-btn:disabled { opacity: 0.4; cursor: default; }
+
+  .seats-dots { display: flex; gap: 4px; }
+  .seat-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+  }
+  .seat-dot.filled { background: #4CAF50; }
+
+  .empty-lobby {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 48px 24px; gap: 12px;
+    opacity: 0.6; text-align: center;
+  }
+  .empty-lobby .icon { font-size: 48px; }
+  .empty-lobby p { font-size: 14px; line-height: 1.5; }
+
+  .lobby-footer {
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.3);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    gap: 8px;
+  }
+  .lobby-footer button {
+    flex: 1; padding: 12px; border: none; border-radius: 12px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-new-game {
+    background: linear-gradient(135deg, #2196F3, #1565c0);
+    color: #fff;
+  }
+  .btn-refresh {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    flex: 0 0 48px !important;
+    font-size: 18px !important;
+  }
+
+  .refresh-spin { animation: spin 0.6s linear; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ── Waiting in room ─────────────────────────────────── */
+  #waiting-screen {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 70vh; gap: 14px; padding: 24px;
   }
   .waiting-icon { font-size: 64px; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
   .waiting-title { font-size: 22px; font-weight: 700; }
   .waiting-sub { font-size: 14px; opacity: 0.7; text-align: center; }
 
+  .player-list {
+    background: rgba(0,0,0,0.25); border-radius: 12px;
+    padding: 12px 16px; width: 100%; max-width: 300px;
+  }
+  .player-list-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.07);
+    font-size: 14px;
+  }
+  .player-list-item:last-child { border-bottom: none; }
+  .player-dot { width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; }
+  .empty-slot { opacity: 0.35; }
+  .empty-slot .player-dot { background: rgba(255,255,255,0.3); }
+
   #result-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 70vh;
-    gap: 14px;
-    padding: 24px;
-    text-align: center;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: 70vh;
+    gap: 14px; padding: 24px; text-align: center;
   }
   .result-icon { font-size: 72px; }
   .result-title { font-size: 28px; font-weight: 800; }
@@ -223,16 +262,51 @@
 </head>
 <body>
 
-<!-- Waiting for game to start -->
-<div id="waiting-screen" class="screen active">
-  <div class="waiting-icon">🃏</div>
-  <div class="waiting-title">Белот</div>
-  <div class="waiting-sub" id="waiting-msg">Загрузка...</div>
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  LOBBY SCREEN — list of open tables                -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="lobby-screen" class="screen">
+  <div class="lobby-header">
+    <div class="logo">🃏</div>
+    <h1>Белот</h1>
+    <p>Выберите стол или создайте новую игру</p>
+  </div>
+
+  <div class="lobby-body">
+    <div class="lobby-section-title">Открытые столы</div>
+    <div id="tables-list">
+      <div class="empty-lobby">
+        <div class="icon">🔍</div>
+        <p>Загрузка столов...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="lobby-footer">
+    <button class="lobby-footer button btn-new-game" onclick="requestNewGame()">
+      ➕ Создать стол
+    </button>
+    <button class="lobby-footer button btn-refresh" id="refresh-btn" onclick="loadLobby()">
+      🔄
+    </button>
+  </div>
 </div>
 
-<!-- Main game screen -->
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  WAITING ROOM — joined, waiting for others         -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="waiting-screen" class="screen">
+  <div class="waiting-icon">⏳</div>
+  <div class="waiting-title">Ждём игроков</div>
+  <div class="waiting-sub" id="waiting-msg">Собираем стол...</div>
+  <div class="player-list" id="waiting-player-list"></div>
+  <div style="font-size:12px;opacity:0.5;margin-top:8px">Игра начнётся автоматически</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  GAME SCREEN                                       -->
+<!-- ═══════════════════════════════════════════════════ -->
 <div id="game-screen" class="screen">
-  <!-- Header -->
   <div id="header">
     <div id="round-info">Раунд <span id="round-num">1</span></div>
     <div id="trump-display">
@@ -242,7 +316,6 @@
     <div id="tricks-count">🔵<span id="tricks0">0</span> 🔴<span id="tricks1">0</span></div>
   </div>
 
-  <!-- Scores -->
   <div id="scores">
     <div class="score-team" id="score-t0">
       <div class="names" id="t0-names">Команда 1</div>
@@ -256,26 +329,24 @@
     </div>
   </div>
 
-  <!-- Table -->
   <div id="table-area">
     <div id="table-label">На столе</div>
     <div id="trick-cards"></div>
   </div>
 
-  <!-- Status -->
   <div id="status-bar"></div>
 
-  <!-- Hand -->
   <div id="hand-label">Ваши карты</div>
   <div id="hand-area">
     <div id="hand-cards"></div>
   </div>
 
-  <!-- Action buttons (bidding, declarations etc.) -->
   <div id="action-area"></div>
 </div>
 
-<!-- Round result screen -->
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  RESULT SCREEN                                     -->
+<!-- ═══════════════════════════════════════════════════ -->
 <div id="result-screen" class="screen">
   <div class="result-icon" id="result-icon">🏅</div>
   <div class="result-title" id="result-title">Раунд завершён</div>
@@ -286,134 +357,220 @@
 
 <script>
 // ── Telegram WebApp init ──────────────────────────────────────────────────
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
 
 // ── State ─────────────────────────────────────────────────────────────────
 let state = null;
 let myId = null;
+let myName = 'Игрок';
 let selectedDiscard = [];
 let selectedPlayCard = null;
+let lobbyRefreshTimer = null;
+let waitingRefreshTimer = null;
+
+// Get Telegram user info
+const tgUser = tg?.initDataUnsafe?.user;
+if (tgUser) {
+  myId = tgUser.id;
+  myName = tgUser.first_name || 'Игрок';
+  if (tgUser.last_name) myName += ' ' + tgUser.last_name;
+}
 
 // ── SVG Card renderer ─────────────────────────────────────────────────────
 const SUIT_COLOR = { '♣': '#1a1a2e', '♠': '#1a1a2e', '♥': '#c0392b', '♦': '#c0392b' };
 const RANK_RU = { '7':'7','8':'8','9':'9','10':'10','J':'В','Q':'Д','K':'К','A':'Т' };
 
-function makeSuitSymbol(suit, size) {
-  // Returns SVG path/text for the suit at given font size
-  return `<text font-size="${size}" fill="${SUIT_COLOR[suit]}" text-anchor="middle">${suit}</text>`;
-}
-
 function makeCardSVG(rank, suit, options = {}) {
-  const { w = 64, h = 96, trump = false, selected = false, invalid = false, small = false } = options;
+  const { w = 64, h = 96, trump = false, invalid = false } = options;
   const color = SUIT_COLOR[suit] || '#1a1a2e';
   const rankRu = RANK_RU[rank] || rank;
-
-  // Background
   let bgFill = 'white';
   let borderColor = trump ? '#f0c040' : '#ccc';
   let borderWidth = trump ? 2.5 : 1.5;
   let opacity = invalid ? 0.5 : 1;
-
-  // Trump shimmer bg
   let extraBg = trump
-    ? `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="url(#tg)" opacity="0.3"/>`
+    ? `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="url(#tg${w})" opacity="0.3"/>`
     : '';
-
-  const fontSize = small ? 10 : 13;
-  const suitSize = small ? 10 : 14;
-  const centerRankSize = small ? 18 : 26;
-  const centerSuitSize = small ? 20 : 28;
-
+  const fontSize = 13, suitSize = 14, centerRankSize = 26, centerSuitSize = 28;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" opacity="${opacity}">
   <defs>
-    ${trump ? `<linearGradient id="tg" x1="0" y1="0" x2="1" y2="1">
+    ${trump ? `<linearGradient id="tg${w}" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#ffd700"/>
       <stop offset="100%" stop-color="#ff8c00"/>
     </linearGradient>` : ''}
   </defs>
-  <!-- Shadow -->
   <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.2)"/>
-  <!-- Card body -->
   <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="${bgFill}" stroke="${borderColor}" stroke-width="${borderWidth}"/>
   ${extraBg}
-  <!-- Top-left rank -->
   <text x="5" y="${fontSize+2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}">${rankRu}</text>
   <text x="5" y="${fontSize*2+4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}">${suit}</text>
-  <!-- Bottom-right (rotated) -->
   <text x="${w-7}" y="${h-fontSize-2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${rankRu}</text>
   <text x="${w-7}" y="${h-4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${suit}</text>
-  <!-- Center -->
   <text x="${(w-2)/2}" y="${(h-2)/2-2}" font-size="${centerSuitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle" dominant-baseline="middle">${suit}</text>
   <text x="${(w-2)/2}" y="${(h-2)/2+centerSuitSize/2+4}" font-size="${centerRankSize}" font-weight="900" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle">${rankRu}</text>
   ${trump ? `<text x="${w-9}" y="12" font-size="10" fill="#f0c040" text-anchor="middle">★</text>` : ''}
 </svg>`;
 }
 
-function makeCardBackSVG(w = 64, h = 96) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.2)"/>
-  <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="#1a3a6b" stroke="#2a5aab" stroke-width="1.5"/>
-  <rect x="6" y="6" width="${w-16}" height="${h-16}" rx="5" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
-  <text x="${(w-2)/2}" y="${(h-2)/2+5}" font-size="28" text-anchor="middle" fill="rgba(255,255,255,0.3)">🃏</text>
-</svg>`;
+// ── LOBBY ─────────────────────────────────────────────────────────────────
+async function loadLobby() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('refresh-spin');
+  setTimeout(() => btn.classList.remove('refresh-spin'), 600);
+
+  try {
+    const res = await fetch('/api/lobby');
+    const data = await res.json();
+    renderTables(data.games || []);
+  } catch (e) {
+    document.getElementById('tables-list').innerHTML = `
+      <div class="empty-lobby">
+        <div class="icon">⚠️</div>
+        <p>Не удалось загрузить столы.<br>Проверьте подключение.</p>
+      </div>`;
+  }
 }
 
-// ── Render functions ──────────────────────────────────────────────────────
+function renderTables(games) {
+  const container = document.getElementById('tables-list');
+  if (games.length === 0) {
+    container.innerHTML = `
+      <div class="empty-lobby">
+        <div class="icon">🃏</div>
+        <p>Нет открытых столов.<br>Создайте игру через бота или нажмите «Создать стол».</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = games.map(g => {
+    const filled = g.slots_taken;
+    const total = g.slots_total;
+    const isFull = filled >= total;
+    const dots = Array.from({length: total}, (_, i) =>
+      `<div class="seat-dot ${i < filled ? 'filled' : ''}"></div>`
+    ).join('');
+    const playerList = g.players.join(', ') || 'Пусто';
+
+    return `
+    <div class="table-card" onclick="joinTable('${g.game_id}')">
+      <div class="table-icon">🃏</div>
+      <div class="table-info">
+        <div class="table-id">${g.game_id}</div>
+        <div class="table-players">👤 ${playerList}</div>
+        <div class="table-mode">${g.mode}</div>
+      </div>
+      <div class="table-slots">
+        <div class="slots-badge ${isFull ? 'full' : 'open'}">
+          ${filled}/${total}
+        </div>
+        <div class="seats-dots">${dots}</div>
+        <button class="join-btn" ${isFull ? 'disabled' : ''} onclick="event.stopPropagation();joinTable('${g.game_id}')">
+          ${isFull ? 'Полный' : 'Войти'}
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function joinTable(gameId) {
+  if (!myId) {
+    tg?.showAlert('Откройте приложение через Telegram чтобы войти в игру.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/join_lobby', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_id: gameId, player_id: myId, player_name: myName }),
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      tg?.showAlert(data.error || 'Не удалось войти в игру');
+      return;
+    }
+
+    // Stop lobby refresh
+    clearInterval(lobbyRefreshTimer);
+
+    // Show waiting room or game state
+    updateUI(data.state);
+
+  } catch (e) {
+    tg?.showAlert('Ошибка подключения. Попробуйте ещё раз.');
+  }
+}
+
+function requestNewGame() {
+  // Tell the bot to create a new game via sendData
+  if (tg) {
+    tg.sendData(JSON.stringify({ action: 'new_game' }));
+  } else {
+    alert('Создайте игру командой /newgame в чате бота.');
+  }
+}
+
+// ── WAITING ROOM ─────────────────────────────────────────────────────────
+function showWaitingRoom(s) {
+  showScreen('waiting-screen');
+
+  const filled = s.slots_taken || 0;
+  const total = s.slots_total || 4;
+  document.getElementById('waiting-msg').textContent =
+    `Игроков: ${filled}/${total} • Код: ${s.game_id || '???'}`;
+
+  const listEl = document.getElementById('waiting-player-list');
+  const players = s.players || [];
+  let html = players.map(name =>
+    `<div class="player-list-item"><div class="player-dot"></div>${name}</div>`
+  ).join('');
+  for (let i = players.length; i < total; i++) {
+    html += `<div class="player-list-item empty-slot"><div class="player-dot"></div>Ожидаем...</div>`;
+  }
+  listEl.innerHTML = html;
+}
+
+// ── GAME UI ───────────────────────────────────────────────────────────────
 function renderHand(hand, validIndices, trumpSuit, phase) {
   const container = document.getElementById('hand-cards');
   container.innerHTML = '';
-
   if (!hand || hand.length === 0) {
     container.innerHTML = '<div style="opacity:0.5;padding:20px">Нет карт</div>';
     return;
   }
-
   hand.forEach((card, i) => {
     const [rank, suit] = card;
     const isTrump = suit === trumpSuit;
     const isValid = validIndices === null || validIndices.includes(i);
     const isSelected = (phase === 'discard' && selectedDiscard.includes(i)) ||
                        (phase === 'play' && selectedPlayCard === i);
-
     const wrap = document.createElement('div');
     wrap.className = 'card-wrap' +
       (isValid ? ' valid' : ' invalid') +
       (isTrump ? ' trump-card' : '') +
       (isSelected ? ' selected' : '');
-
-    wrap.innerHTML = makeSVGCard(rank, suit, { trump: isTrump, invalid: !isValid, selected: isSelected });
-
+    wrap.innerHTML = makeCardSVG(rank, suit, { trump: isTrump, invalid: !isValid });
     if (isValid) {
       wrap.onclick = () => onCardClick(i, phase);
     } else {
-      wrap.onclick = () => tg.showAlert('Эту карту нельзя сыграть по правилам!');
+      wrap.onclick = () => tg?.showAlert('Эту карту нельзя сыграть по правилам!');
     }
-
     container.appendChild(wrap);
   });
-}
-
-function makeSVGCard(rank, suit, opts) {
-  const div = document.createElement('div');
-  div.innerHTML = makeCardSVG(rank, suit, opts);
-  return div.innerHTML;
 }
 
 function renderTrick(trick, playerNames, trumpSuit) {
   const container = document.getElementById('trick-cards');
   container.innerHTML = '';
-
   if (!trick || trick.length === 0) {
     container.innerHTML = '<div style="opacity:0.4;font-size:13px;padding:10px 0">Стол пуст</div>';
     return;
   }
-
   trick.forEach(([pid, rank, suit]) => {
     const isTrump = suit === trumpSuit;
-    const name = playerNames[pid] || '?';
-
+    const name = (playerNames || {})[pid] || '?';
     const slot = document.createElement('div');
     slot.className = 'trick-slot';
     slot.innerHTML = `
@@ -424,36 +581,44 @@ function renderTrick(trick, playerNames, trumpSuit) {
   });
 }
 
-// ── State update ──────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
 function updateUI(s) {
   state = s;
+  clearInterval(waitingRefreshTimer);
 
-  // Switch screens
-  document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+  if (s.phase === 'lobby_waiting') {
+    showWaitingRoom(s);
+    // Poll every 3s to detect game start
+    waitingRefreshTimer = setInterval(() => pollGameState(s.game_id), 3000);
+    return;
+  }
 
   if (s.phase === 'waiting') {
-    document.getElementById('waiting-screen').classList.add('active');
+    showScreen('waiting-screen');
     document.getElementById('waiting-msg').textContent = s.message || 'Ожидаем игроков...';
+    document.getElementById('waiting-player-list').innerHTML = '';
     return;
   }
 
   if (s.phase === 'result') {
-    document.getElementById('result-screen').classList.add('active');
+    showScreen('result-screen');
     document.getElementById('result-icon').textContent = s.win ? '🏆' : '😔';
     document.getElementById('result-title').textContent = s.title || 'Раунд завершён';
     document.getElementById('result-sub').textContent = s.message || '';
     return;
   }
 
-  document.getElementById('game-screen').classList.add('active');
+  showScreen('game-screen');
 
-  // Header
   document.getElementById('round-num').textContent = s.round || 1;
   document.getElementById('trump-suit').textContent = s.trump || '?';
   document.getElementById('tricks0').textContent = s.tricks ? s.tricks[0] : 0;
   document.getElementById('tricks1').textContent = s.tricks ? s.tricks[1] : 0;
 
-  // Scores
   const target = 151;
   document.getElementById('t0-names').textContent = s.team0_name || 'Команда 1';
   document.getElementById('t1-names').textContent = s.team1_name || 'Команда 2';
@@ -462,10 +627,8 @@ function updateUI(s) {
   document.getElementById('t0-bar').style.width = Math.min(100, ((s.scores||[0,0])[0] / target * 100)) + '%';
   document.getElementById('t1-bar').style.width = Math.min(100, ((s.scores||[0,0])[1] / target * 100)) + '%';
 
-  // Trick
   renderTrick(s.trick || [], s.player_names || {}, s.trump);
 
-  // Status
   const statusEl = document.getElementById('status-bar');
   if (s.is_my_turn) {
     statusEl.textContent = '🎯 Ваш ход!';
@@ -475,13 +638,9 @@ function updateUI(s) {
     statusEl.className = 'waiting';
   }
 
-  // Hand
   document.getElementById('hand-label').style.display = s.hand ? 'block' : 'none';
-  if (s.hand) {
-    renderHand(s.hand, s.valid_indices, s.trump, s.phase);
-  }
+  if (s.hand) renderHand(s.hand, s.valid_indices, s.trump, s.phase);
 
-  // Actions
   renderActions(s);
 }
 
@@ -495,8 +654,7 @@ function renderActions(s) {
       <button class="action-btn btn-take" onclick="sendAction('bid_take', 'proposed')">
         ✅ Взять ${s.trump} ${s.trump_name}
       </button>
-      <button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>
-    `;
+      <button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>`;
   } else if (s.phase === 'bid2') {
     const suits = [['♣','Трефы'],['♦','Бубны'],['♥','Червы'],['♠','Пики']];
     const others = suits.filter(([sv]) => sv !== s.proposed_suit);
@@ -505,14 +663,11 @@ function renderActions(s) {
         <button class="action-btn btn-suit" onclick="sendAction('bid_take', '${sv}')">
           ${sv} ${sn}
         </button>`).join('') +
-      `</div>
-      <button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>`;
+      `</div><button class="action-btn btn-pass" onclick="sendAction('bid_pass')">⏭ Пас</button>`;
   } else if (s.phase === 'declare') {
-    area.innerHTML = `
-      <button class="action-btn btn-primary" onclick="sendAction('declare')">
-        📣 Заявить комбинации
-      </button>
-    `;
+    area.innerHTML = `<button class="action-btn btn-primary" onclick="sendAction('declare')">
+      📣 Заявить комбинации
+    </button>`;
     if (s.declarations && s.declarations.length) {
       const declHtml = s.declarations.map(d => `<div style="font-size:13px;opacity:0.8">📌 ${d}</div>`).join('');
       area.innerHTML = `<div style="padding:8px 0;display:flex;flex-direction:column;gap:4px">${declHtml}</div>` + area.innerHTML;
@@ -523,13 +678,9 @@ function renderActions(s) {
     selectedDiscard = [];
     updateDiscardBtn();
     document.getElementById('confirm-discard-btn').style.display = 'block';
-    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">
-      Нажмите на 2 карты чтобы сбросить их
-    </div>`;
+    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">Нажмите на 2 карты чтобы сбросить их</div>`;
   } else if (s.phase === 'play' && s.is_my_turn) {
-    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">
-      Нажмите на карту чтобы сыграть её
-    </div>`;
+    area.innerHTML = `<div style="font-size:13px;opacity:0.7;text-align:center">Нажмите на карту чтобы сыграть её</div>`;
   }
 }
 
@@ -541,7 +692,7 @@ function onCardClick(index, phase) {
     } else if (selectedDiscard.length < 2) {
       selectedDiscard.push(index);
     } else {
-      tg.showAlert('Уже выбрано 2 карты. Снимите выбор с одной.');
+      tg?.showAlert('Уже выбрано 2 карты. Снимите выбор с одной.');
       return;
     }
     updateDiscardBtn();
@@ -549,7 +700,6 @@ function onCardClick(index, phase) {
   } else if (phase === 'play' && state.is_my_turn) {
     selectedPlayCard = index;
     renderHand(state.hand, state.valid_indices, state.trump, 'play');
-    // Small delay for visual feedback
     setTimeout(() => sendAction('play', index), 180);
   }
 }
@@ -562,7 +712,7 @@ function updateDiscardBtn() {
 
 function confirmDiscard() {
   if (selectedDiscard.length !== 2) {
-    tg.showAlert('Выберите ровно 2 карты для сброса!');
+    tg?.showAlert('Выберите ровно 2 карты для сброса!');
     return;
   }
   sendAction('discard', selectedDiscard.join(','));
@@ -571,17 +721,32 @@ function confirmDiscard() {
 // ── Communication with bot ────────────────────────────────────────────────
 function sendAction(action, data) {
   const payload = JSON.stringify({ action, data: data !== undefined ? String(data) : null });
-  tg.sendData(payload);
+  if (tg) tg.sendData(payload);
 }
 
-// ── Init from URL ─────────────────────────────────────────────────────────
-function initFromUrl() {
-  // State passed as base64 JSON in the hash
+// ── Poll game state while in waiting room ─────────────────────────────────
+async function pollGameState(gameId) {
+  if (!myId) return;
+  try {
+    const res = await fetch('/api/lobby');
+    const data = await res.json();
+    // If game no longer in lobby list, it has started — reload via hash or notify
+    const stillOpen = (data.games || []).some(g => g.game_id === gameId);
+    if (!stillOpen) {
+      clearInterval(waitingRefreshTimer);
+      // Game started — user needs to reopen via bot button for full state
+      document.getElementById('waiting-msg').textContent = 'Игра началась! Нажмите кнопку в боте.';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+function init() {
   const hash = window.location.hash.slice(1);
   if (hash) {
     try {
       const decoded = JSON.parse(atob(hash));
-      myId = decoded.my_id;
+      myId = decoded.my_id || myId;
       updateUI(decoded);
       return;
     } catch(e) {
@@ -589,11 +754,14 @@ function initFromUrl() {
     }
   }
 
-  // Fallback: waiting screen
-  updateUI({ phase: 'waiting', message: 'Откройте мини-приложение через кнопку в игре' });
+  // No game state — show lobby
+  showScreen('lobby-screen');
+  loadLobby();
+  // Auto-refresh lobby every 5s
+  lobbyRefreshTimer = setInterval(loadLobby, 5000);
 }
 
-initFromUrl();
+init();
 </script>
 </body>
 </html>

@@ -13,12 +13,18 @@ from aiohttp import web
 logger = logging.getLogger(__name__)
 
 WEBAPP_DIR = Path(__file__).parent
-# Railway injects PORT dynamically — must use it, not a hardcoded port
 PORT = int(os.environ.get("PORT", os.environ.get("WEBAPP_PORT", 8080)))
+
+# Reference to game_manager — injected from bot.py after startup
+_game_manager = None
+
+
+def set_game_manager(gm):
+    global _game_manager
+    _game_manager = gm
 
 
 async def serve_app(request):
-    """Serve the main HTML page."""
     html_path = WEBAPP_DIR / "webapp.html"
     if not html_path.exists():
         return web.Response(status=404, text="webapp.html not found")
@@ -30,15 +36,64 @@ async def health(request):
     return web.Response(text="ok")
 
 
+async def api_lobby(request):
+    """Return list of open (waiting) games as JSON."""
+    if not _game_manager:
+        return web.json_response({"games": []})
+
+    from game import GameState
+    games = []
+    for game_id, game in _game_manager.games.items():
+        if game.state == GameState.WAITING:
+            games.append({
+                "game_id": game_id,
+                "players": list(game.player_names.values()),
+                "slots_taken": len(game.players),
+                "slots_total": game.max_players,
+                "mode": f"{game.max_players} игрока",
+            })
+
+    return web.json_response({"games": games}, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
+    })
+
+
+async def api_join_lobby(request):
+    """
+    Called from webapp when player taps Join on a lobby table.
+    Expects JSON: { "game_id": "XXXX", "player_id": 12345, "player_name": "Иван" }
+    """
+    if not _game_manager:
+        return web.json_response({"ok": False, "error": "Server not ready"}, status=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Bad JSON"}, status=400)
+
+    game_id = body.get("game_id", "").strip().upper()
+    player_id = body.get("player_id")
+    player_name = body.get("player_name", "Игрок")
+
+    if not game_id or not player_id:
+        return web.json_response({"ok": False, "error": "Missing game_id or player_id"}, status=400)
+
+    game, error = _game_manager.join_game(game_id, int(player_id), player_name)
+    if error:
+        return web.json_response({"ok": False, "error": error})
+
+    state = make_game_state(game, int(player_id))
+    return web.json_response({"ok": True, "game_id": game_id, "state": state}, headers={
+        "Access-Control-Allow-Origin": "*",
+    })
+
+
 def make_game_state(game, player_id: int) -> dict:
-    """
-    Serialize game state for a specific player into the webapp state dict.
-    """
     p = game.players
     n = game.player_names
     trump = game.trump_suit
 
-    # Team names
     if game.max_players == 4:
         t0 = f"{n.get(p[0], '?')} & {n.get(p[2], '?')}" if len(p) > 2 else "Команда 1"
         t1 = f"{n.get(p[1], '?')} & {n.get(p[3], '?')}" if len(p) > 3 else "Команда 2"
@@ -52,24 +107,33 @@ def make_game_state(game, player_id: int) -> dict:
             t0 = n.get(p[0], '?') if p else '?'
             t1 = " & ".join(n.get(pid, '?') for pid in p[1:]) if len(p) > 1 else '?'
 
-    # Player names dict (str keys for JSON)
     player_names = {str(pid): n.get(pid, '?') for pid in p}
-
-    # Current trick as list of [pid_str, rank, suit]
     trick = [
         [str(pid), card.rank.value, card.suit.value]
         for pid, card in game.current_trick
     ]
-
-    # Player's hand as list of [rank, suit]
     hand = None
     valid_indices = None
     if player_id in game.hands:
         hand = [[c.rank.value, c.suit.value] for c in game.hands[player_id]]
 
-    # Phase
     from game import GameState
     phase = game.state
+
+    if phase == GameState.WAITING:
+        return {
+            "phase": "lobby_waiting",
+            "my_id": str(player_id),
+            "game_id": game.game_id,
+            "players": list(n.values()),
+            "slots_taken": len(p),
+            "slots_total": game.max_players,
+            "team0_name": t0,
+            "team1_name": t1,
+            "player_names": player_names,
+            "scores": game.scores[:],
+            "tricks": game.tricks_won[:],
+        }
 
     if phase == GameState.BIDDING:
         is_my_turn = (p[game.current_bidder_idx] == player_id)
@@ -179,7 +243,6 @@ def make_game_state(game, player_id: int) -> dict:
 
 
 def state_to_url(webapp_url: str, game, player_id: int) -> str:
-    """Encode game state as base64 and append to webapp URL as hash."""
     state = make_game_state(game, player_id)
     encoded = base64.b64encode(json.dumps(state, ensure_ascii=False).encode()).decode()
     return f"{webapp_url.rstrip('/')}/#" + encoded
@@ -192,12 +255,17 @@ def _suit_name(suit) -> str:
     return names.get(suit, "")
 
 
-async def start_server():
+async def start_server(game_manager=None):
     """Start the aiohttp web server."""
+    if game_manager:
+        set_game_manager(game_manager)
+
     app = web.Application()
     app.router.add_get("/", serve_app)
     app.router.add_get("/app", serve_app)
     app.router.add_get("/health", health)
+    app.router.add_get("/api/lobby", api_lobby)
+    app.router.add_post("/api/join_lobby", api_join_lobby)
 
     runner = web.AppRunner(app)
     await runner.setup()

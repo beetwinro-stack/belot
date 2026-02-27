@@ -31,8 +31,6 @@ def main():
     if not token:
         raise ValueError("BOT_TOKEN environment variable not set!")
 
-    # WEBAPP_URL must be set to your public HTTPS URL, e.g.:
-    # https://your-app.railway.app  or  https://your-app.onrender.com
     webapp_url = os.environ.get("WEBAPP_URL", "")
     if not webapp_url:
         logger.warning("WEBAPP_URL not set! Mini App buttons will not work.")
@@ -47,13 +45,14 @@ def main():
     app.add_handler(CommandHandler("join", join_game_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
-    # Handle data sent from the Mini App
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, webapp_data_handler))
 
     async def post_init(application):
-        runner = await start_server()
+        # Pass game_manager so the web server can serve the lobby API
+        runner = await start_server(game_manager=game_manager)
         application.bot_data["webapp_runner"] = runner
-        logger.info(f"WebApp serving at port {os.environ.get('PORT', os.environ.get('WEBAPP_PORT', 8080))}")
+        port = os.environ.get('PORT', os.environ.get('WEBAPP_PORT', 8080))
+        logger.info(f"WebApp serving at port {port}")
 
     app.post_init = post_init
 
