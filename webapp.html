@@ -543,28 +543,37 @@ async function joinTable(gameId) {
     myName = 'Игрок_' + String(myId).slice(-4);
   }
 
+  let data;
   try {
     const res = await fetch('/api/join_lobby', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ game_id: gameId, player_id: myId, player_name: myName }),
     });
-    const data = await res.json();
-
-    if (!data.ok) {
-      tg?.showAlert(data.error || 'Не удалось войти в игру');
-      return;
-    }
-
-    // Stop lobby refresh
-    clearInterval(lobbyRefreshTimer);
-
-    // Show waiting room or game state
-    updateUI(data.state);
-
+    data = await res.json();
   } catch (e) {
-    tg?.showAlert('Ошибка подключения. Попробуйте ещё раз.');
+    tg?.showAlert('Ошибка сети. Проверьте подключение.');
+    if (!tg) alert('Ошибка сети: ' + e.message);
+    return;
   }
+
+  if (!data.ok) {
+    tg?.showAlert(data.error || 'Не удалось войти в игру');
+    if (!tg) alert(data.error || 'Не удалось войти в игру');
+    return;
+  }
+
+  // Stop lobby refresh
+  clearInterval(lobbyRefreshTimer);
+
+  // Game already started — show notification to open via bot
+  const phase = data.state?.phase;
+  if (phase && phase !== 'lobby_waiting' && phase !== 'waiting') {
+    showGameStartedScreen(data.state);
+    return;
+  }
+
+  updateUI(data.state);
 }
 
 function requestNewGame() {
@@ -597,7 +606,9 @@ async function createGame(maxPlayers) {
     clearInterval(lobbyRefreshTimer);
     updateUI(data.state);
   } catch(e) {
-    alert('Ошибка соединения: ' + e.message);
+    const msg = 'Ошибка соединения: ' + e.message;
+    tg?.showAlert(msg);
+    alert(msg);
   }
 }
 
@@ -834,6 +845,21 @@ async function pollGameState(gameId) {
     }
   } catch (e) { /* ignore */ }
 }
+
+// ── Game started screen ──────────────────────────────────────────────────
+function showGameStartedScreen(s) {
+  // Game already started when this player joined — redirect them properly
+  showScreen('waiting-screen');
+  document.getElementById('waiting-msg').textContent = 'Игра уже началась!';
+  document.getElementById('waiting-player-list').innerHTML = `
+    <div class="player-list-item" style="justify-content:center;opacity:0.8">
+      🎮 Нажмите кнопку в боте чтобы открыть игру
+    </div>
+  `;
+  document.getElementById('leave-btn').style.display = 'none';
+  clearInterval(waitingRefreshTimer);
+}
+
 
 // ── Leave / close table ──────────────────────────────────────────────────
 async function leaveTable() {
