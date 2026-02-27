@@ -68,13 +68,25 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if args and args[0].startswith("join_"):
         await _do_join(update, context, args[0][5:])
         return
+
+    webapp_url = get_webapp_url(context)
+    if webapp_url:
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Открыть лобби", web_app=WebAppInfo(url=webapp_url))],
+            [InlineKeyboardButton("🃏 Создать игру", callback_data="create_game_prompt")],
+            [InlineKeyboardButton("🔗 Войти по коду", callback_data="join_game_prompt")],
+            [InlineKeyboardButton("📖 Правила", callback_data="show_rules")],
+        ])
+    else:
+        kb = main_menu_keyboard()
+
     await update.message.reply_text(
         "🃏 *Белот — Молдавские правила*\n\n"
         "Карточная игра для 3 или 4 игроков.\n"
         "Первый до 151 очка — победитель!\n\n"
         "Выберите действие:",
         parse_mode=ParseMode.MARKDOWN,
-        reply_markup=main_menu_keyboard()
+        reply_markup=kb
     )
 
 

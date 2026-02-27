@@ -54,6 +54,20 @@ def main():
         port = os.environ.get('PORT', os.environ.get('WEBAPP_PORT', 8080))
         logger.info(f"WebApp serving at port {port}")
 
+        # Set Menu Button so players can open lobby from bottom menu in Telegram
+        if webapp_url:
+            try:
+                from telegram import MenuButtonWebApp, WebAppInfo
+                await application.bot.set_chat_menu_button(
+                    menu_button=MenuButtonWebApp(
+                        text="🎮 Лобби",
+                        web_app=WebAppInfo(url=webapp_url)
+                    )
+                )
+                logger.info("Menu button set to webapp lobby")
+            except Exception as e:
+                logger.warning(f"Could not set menu button: {e}")
+
     app.post_init = post_init
 
     logger.info("Belot bot started!")
