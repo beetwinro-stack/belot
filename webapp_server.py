@@ -110,6 +110,116 @@ async def api_join_lobby(request):
     })
 
 
+async def api_action(request):
+    """
+    Handle a game action from the webapp.
+    POST /api/action
+    Body: { "player_id": 12345, "action": "play", "data": "3" }
+    """
+    if not _game_manager:
+        return web.json_response({"ok": False, "error": "Server not ready"})
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Bad JSON"}, status=400)
+
+    player_id = body.get("player_id")
+    action = body.get("action")
+    data = body.get("data")
+
+    if not player_id or not action:
+        return web.json_response({"ok": False, "error": "Missing player_id or action"}, status=400)
+
+    player_id = int(player_id)
+    game = _game_manager.get_game_by_player(player_id)
+    if not game:
+        return web.json_response({"ok": False, "error": "Не в игре"})
+
+    from game import GameState
+    from cards import Suit as SuitEnum
+
+    result_msg = None
+    error = None
+
+    try:
+        if action == "bid_pass":
+            res = game.bid_pass(player_id)
+            if not res["ok"]:
+                error = res["error"]
+            else:
+                result_msg = "Пас"
+                if res.get("redeal"):
+                    game.start_round()
+                    if _bot_notify_callback:
+                        import asyncio
+                        asyncio.create_task(_bot_notify_callback(game))
+
+        elif action == "bid_take":
+            suit = None
+            if data and data != "proposed":
+                suit = next((s for s in SuitEnum if s.value == data), None)
+            res = game.bid_take(player_id, suit)
+            if not res["ok"]:
+                error = res["error"]
+            else:
+                trump = game.trump_suit
+                result_msg = f"Козырь: {trump.value}"
+                if _bot_notify_callback:
+                    import asyncio
+                    asyncio.create_task(_bot_notify_callback(game))
+
+        elif action == "discard":
+            indices = [int(x) for x in str(data).split(",") if x.strip().isdigit()]
+            res = game.discard_cards(player_id, indices)
+            if not res["ok"]:
+                error = res["error"]
+            else:
+                result_msg = "Карты сброшены"
+
+        elif action == "declare":
+            res = game.submit_declarations(player_id)
+            if not res["ok"]:
+                error = res["error"]
+            else:
+                result_msg = "Комбинации заявлены"
+                if res.get("all_done") and _bot_notify_callback:
+                    import asyncio
+                    asyncio.create_task(_bot_notify_callback(game))
+
+        elif action == "play":
+            card_idx = int(data)
+            hand = game.hands.get(player_id, [])
+            if card_idx >= len(hand):
+                error = "Неверный индекс карты"
+            else:
+                card = hand[card_idx]
+                res = game.play_card(player_id, card)
+                if not res["ok"]:
+                    error = res["error"]
+                else:
+                    result_msg = f"Сыграно: {card.emoji()}"
+                    # Notify via bot for trick/round results
+                    if _bot_notify_callback and (res.get("trick_done") or res.get("round_done")):
+                        import asyncio
+                        asyncio.create_task(_bot_notify_callback(game, res))
+        else:
+            error = f"Unknown action: {action}"
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        error = str(e)
+
+    if error:
+        return web.json_response({"ok": False, "error": error},
+                                 headers={"Access-Control-Allow-Origin": "*"})
+
+    # Return updated game state
+    state = make_game_state(game, player_id)
+    return web.json_response({"ok": True, "message": result_msg, "state": state},
+                             headers={"Access-Control-Allow-Origin": "*"})
+
+
 async def api_game_state(request):
     """
     Poll current game state for a player.
@@ -195,7 +305,8 @@ async def api_leave_lobby(request):
     return web.json_response(result, headers={"Access-Control-Allow-Origin": "*"})
 
 
-def make_game_state(game, player_id: int) -> dict:
+def make_game_state(game, player_id) -> dict:
+    player_id = int(player_id)  # ensure int — JSON may send string
     p = game.players
     n = game.player_names
     trump = game.trump_suit
@@ -375,6 +486,7 @@ async def start_server(game_manager=None):
     app.router.add_post("/api/join_lobby", api_join_lobby)
     app.router.add_post("/api/create_game", api_create_game)
     app.router.add_get("/api/game_state", api_game_state)
+    app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/leave_lobby", api_leave_lobby)
 
     runner = web.AppRunner(app)
