@@ -17,11 +17,17 @@ PORT = int(os.environ.get("PORT", os.environ.get("WEBAPP_PORT", 8080)))
 
 # Reference to game_manager — injected from bot.py after startup
 _game_manager = None
+_bot_notify_callback = None  # async fn(game) called when game starts via webapp
 
 
 def set_game_manager(gm):
     global _game_manager
     _game_manager = gm
+
+
+def set_bot_notify_callback(fn):
+    global _bot_notify_callback
+    _bot_notify_callback = fn
 
 
 async def serve_app(request):
@@ -79,13 +85,52 @@ async def api_join_lobby(request):
     if not game_id or not player_id:
         return web.json_response({"ok": False, "error": "Missing game_id or player_id"}, status=400)
 
+    from game import GameState
+
+    # Check if already in THIS game (rejoin case)
+    existing = _game_manager.get_game_by_player(int(player_id))
+    if existing and existing.game_id == game_id:
+        state = make_game_state(existing, int(player_id))
+        return web.json_response({"ok": True, "game_id": game_id, "state": state,
+                                  "rejoined": True}, headers={"Access-Control-Allow-Origin": "*"})
+
     game, error = _game_manager.join_game(game_id, int(player_id), player_name)
     if error:
         return web.json_response({"ok": False, "error": error})
 
     state = make_game_state(game, int(player_id))
+
+    # If game just started — trigger bot notification for all OTHER players
+    if game.state != GameState.WAITING and _bot_notify_callback:
+        import asyncio
+        asyncio.create_task(_bot_notify_callback(game))
+
     return web.json_response({"ok": True, "game_id": game_id, "state": state}, headers={
         "Access-Control-Allow-Origin": "*",
+    })
+
+
+async def api_game_state(request):
+    """
+    Poll current game state for a player.
+    GET /api/game_state?player_id=12345
+    Used by waiting room to detect when game starts.
+    """
+    if not _game_manager:
+        return web.json_response({"ok": False, "error": "Server not ready"})
+
+    player_id = request.rel_url.query.get("player_id")
+    if not player_id:
+        return web.json_response({"ok": False, "error": "Missing player_id"})
+
+    game = _game_manager.get_game_by_player(int(player_id))
+    if not game:
+        return web.json_response({"ok": False, "error": "Not in a game"})
+
+    state = make_game_state(game, int(player_id))
+    return web.json_response({"ok": True, "state": state}, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-cache",
     })
 
 
@@ -108,14 +153,19 @@ async def api_create_game(request):
     if not player_id:
         return web.json_response({"ok": False, "error": "Missing player_id"}, status=400)
 
-    # If already in a waiting game — leave it first
+    from game import GameState
+
+    # If already in any game — handle gracefully
     existing = _game_manager.get_game_by_player(int(player_id))
     if existing:
-        from game import GameState
         if existing.state == GameState.WAITING:
+            # Leave the waiting game silently, then create new
             _game_manager.leave_game(int(player_id))
         else:
-            return web.json_response({"ok": False, "error": "Вы уже в активной игре."})
+            # Already in active game — return its current state instead of error
+            state = make_game_state(existing, int(player_id))
+            return web.json_response({"ok": True, "game_id": existing.game_id, "state": state,
+                                      "rejoined": True}, headers={"Access-Control-Allow-Origin": "*"})
 
     game = _game_manager.create_game(int(player_id), player_name, max_players=max_players)
     state = make_game_state(game, int(player_id))
@@ -324,6 +374,7 @@ async def start_server(game_manager=None):
     app.router.add_get("/api/lobby", api_lobby)
     app.router.add_post("/api/join_lobby", api_join_lobby)
     app.router.add_post("/api/create_game", api_create_game)
+    app.router.add_get("/api/game_state", api_game_state)
     app.router.add_post("/api/leave_lobby", api_leave_lobby)
 
     runner = web.AppRunner(app)

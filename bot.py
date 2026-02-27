@@ -49,6 +49,17 @@ def main():
 
     async def post_init(application):
         # Pass game_manager so the web server can serve the lobby API
+        from webapp_server import set_bot_notify_callback
+        from handlers import _notify_bidding_start as notify_fn
+
+        async def on_game_start_from_webapp(game):
+            """Called by webapp_server when last player joins via webapp."""
+            try:
+                await notify_fn(context, game)
+            except Exception as e:
+                logger.error(f"on_game_start_from_webapp error: {e}", exc_info=True)
+
+        set_bot_notify_callback(on_game_start_from_webapp)
         runner = await start_server(game_manager=game_manager)
         application.bot_data["webapp_runner"] = runner
         port = os.environ.get('PORT', os.environ.get('WEBAPP_PORT', 8080))

@@ -834,16 +834,39 @@ function sendAction(action, data) {
 async function pollGameState(gameId) {
   if (!myId) return;
   try {
-    const res = await fetch('/api/lobby');
+    const res = await fetch(`/api/game_state?player_id=${myId}`);
     const data = await res.json();
-    // If game no longer in lobby list, it has started — reload via hash or notify
-    const stillOpen = (data.games || []).some(g => g.game_id === gameId);
-    if (!stillOpen) {
+
+    if (!data.ok) {
+      // No longer in a game (kicked or closed)
       clearInterval(waitingRefreshTimer);
-      // Game started — user needs to reopen via bot button for full state
-      document.getElementById('waiting-msg').textContent = 'Игра началась! Нажмите кнопку в боте.';
+      showScreen('lobby-screen');
+      loadLobby();
+      lobbyRefreshTimer = setInterval(loadLobby, 5000);
+      return;
     }
-  } catch (e) { /* ignore */ }
+
+    const phase = data.state?.phase;
+
+    // Still waiting — update player list
+    if (phase === 'lobby_waiting') {
+      showWaitingRoom(data.state);
+      return;
+    }
+
+    // Game has started!
+    clearInterval(waitingRefreshTimer);
+    if (phase && phase !== 'waiting') {
+      // Try to show the game state directly
+      try {
+        updateUI(data.state);
+      } catch(e) {
+        document.getElementById('waiting-msg').textContent = '🎮 Игра началась! Нажмите кнопку в боте.';
+        document.getElementById('waiting-player-list').innerHTML = '';
+        document.getElementById('leave-btn').style.display = 'none';
+      }
+    }
+  } catch (e) { /* ignore network errors */ }
 }
 
 // ── Game started screen ──────────────────────────────────────────────────
