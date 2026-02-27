@@ -89,6 +89,27 @@ async def api_join_lobby(request):
     })
 
 
+async def api_leave_lobby(request):
+    """
+    Called from webapp when player taps Leave/Close on their table.
+    Expects JSON: { "player_id": 12345 }
+    """
+    if not _game_manager:
+        return web.json_response({"ok": False, "error": "Server not ready"}, status=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Bad JSON"}, status=400)
+
+    player_id = body.get("player_id")
+    if not player_id:
+        return web.json_response({"ok": False, "error": "Missing player_id"}, status=400)
+
+    result = _game_manager.leave_game(int(player_id))
+    return web.json_response(result, headers={"Access-Control-Allow-Origin": "*"})
+
+
 def make_game_state(game, player_id: int) -> dict:
     p = game.players
     n = game.player_names
@@ -125,6 +146,7 @@ def make_game_state(game, player_id: int) -> dict:
             "phase": "lobby_waiting",
             "my_id": str(player_id),
             "game_id": game.game_id,
+            "is_creator": (getattr(game, "creator_id", None) == player_id),
             "players": list(n.values()),
             "slots_taken": len(p),
             "slots_total": game.max_players,
@@ -266,6 +288,7 @@ async def start_server(game_manager=None):
     app.router.add_get("/health", health)
     app.router.add_get("/api/lobby", api_lobby)
     app.router.add_post("/api/join_lobby", api_join_lobby)
+    app.router.add_post("/api/leave_lobby", api_leave_lobby)
 
     runner = web.AppRunner(app)
     await runner.setup()

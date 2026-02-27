@@ -301,6 +301,12 @@
   <div class="waiting-sub" id="waiting-msg">Собираем стол...</div>
   <div class="player-list" id="waiting-player-list"></div>
   <div style="font-size:12px;opacity:0.5;margin-top:8px">Игра начнётся автоматически</div>
+  <button id="leave-btn" onclick="leaveTable()" style="
+    margin-top:20px; background:rgba(229,57,53,0.2); border:1px solid rgba(229,57,53,0.4);
+    color:#ef9a9a; border-radius:12px; padding:11px 28px;
+    font-size:14px; font-weight:600; cursor:pointer;">
+    🚪 Выйти из стола
+  </button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -368,6 +374,7 @@ let selectedDiscard = [];
 let selectedPlayCard = null;
 let lobbyRefreshTimer = null;
 let waitingRefreshTimer = null;
+let currentWaitingState = null;
 
 // Get Telegram user info
 const tgUser = tg?.initDataUnsafe?.user;
@@ -515,6 +522,7 @@ function requestNewGame() {
 // ── WAITING ROOM ─────────────────────────────────────────────────────────
 function showWaitingRoom(s) {
   showScreen('waiting-screen');
+  currentWaitingState = s;
 
   const filled = s.slots_taken || 0;
   const total = s.slots_total || 4;
@@ -530,6 +538,11 @@ function showWaitingRoom(s) {
     html += `<div class="player-list-item empty-slot"><div class="player-dot"></div>Ожидаем...</div>`;
   }
   listEl.innerHTML = html;
+
+  // Show correct label: creator sees "Закрыть стол", others see "Выйти"
+  const leaveBtn = document.getElementById('leave-btn');
+  const isCreator = s.is_creator || false;
+  leaveBtn.textContent = isCreator ? '🚫 Закрыть стол' : '🚪 Выйти из стола';
 }
 
 // ── GAME UI ───────────────────────────────────────────────────────────────
@@ -739,6 +752,55 @@ async function pollGameState(gameId) {
     }
   } catch (e) { /* ignore */ }
 }
+
+// ── Leave / close table ──────────────────────────────────────────────────
+async function leaveTable() {
+  if (!myId) {
+    tg?.showAlert('Войдите через Telegram.');
+    return;
+  }
+
+  const s = currentWaitingState;
+  const isCreator = s?.is_creator || false;
+  const confirmMsg = isCreator
+    ? 'Вы уверены? Стол будет закрыт для всех игроков.'
+    : 'Вы уверены, что хотите выйти из стола?';
+
+  tg?.showConfirm(confirmMsg, async (confirmed) => {
+    if (!confirmed) return;
+    await doLeave();
+  });
+
+  // Fallback for non-Telegram browsers
+  if (!tg) {
+    if (!confirm(confirmMsg)) return;
+    await doLeave();
+  }
+}
+
+async function doLeave() {
+  try {
+    const res = await fetch('/api/leave_lobby', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: myId }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      tg?.showAlert(data.error || 'Ошибка выхода');
+      return;
+    }
+    // Back to lobby
+    clearInterval(waitingRefreshTimer);
+    currentWaitingState = null;
+    showScreen('lobby-screen');
+    loadLobby();
+    lobbyRefreshTimer = setInterval(loadLobby, 5000);
+  } catch(e) {
+    tg?.showAlert('Ошибка соединения. Попробуйте ещё раз.');
+  }
+}
+
 
 // ── Init ──────────────────────────────────────────────────────────────────
 function init() {

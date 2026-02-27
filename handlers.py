@@ -156,14 +156,16 @@ async def _do_join(update: Update, context: ContextTypes.DEFAULT_TYPE, game_id: 
         count = len(game.players)
         await update.message.reply_text(
             f"✅ Вы вошли в `{game_id}`!\n{DIV}\n{players_text}\n\n⏳ Ждём ещё {max_p - count}...",
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_waiting_room_keyboard(game, pid)
         )
         for existing_pid in game.players:
             if existing_pid != pid:
                 try:
                     await context.bot.send_message(
                         chat_id=existing_pid,
-                        text=f"👋 {name} присоединился!\n{players_text}\n⏳ Ждём ещё {max_p - count}..."
+                        text=f"👋 {name} присоединился!\n{players_text}\n⏳ Ждём ещё {max_p - count}...",
+                        reply_markup=_waiting_room_keyboard(game, existing_pid)
                     )
                 except Exception:
                     pass
@@ -323,6 +325,17 @@ async def _send_watch(context, game, player_id, next_player_name):
     )
 
 
+# ─── Waiting room keyboard ───────────────────────────────────────────────────
+def _waiting_room_keyboard(game, player_id):
+    """Keyboard shown in the waiting room with leave/close button."""
+    from telegram import WebAppInfo
+    is_creator = (getattr(game, "creator_id", None) == player_id)
+    btn_label = "🚫 Закрыть стол" if is_creator else "🚪 Выйти из стола"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(btn_label, callback_data="leave_table")],
+    ])
+
+
 # ─── Main callback handler ───────────────────────────────────────────────────
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -360,7 +373,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{join_link}\n\n"
             f"Или: `/join {game.game_id}`\n\n"
             f"👤 1/{max_p} · {name} ✅\n⬜️ Ждём ещё {max_p - 1}...",
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=_waiting_room_keyboard(game, pid)
         )
         return
 
@@ -370,6 +384,43 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "show_rules":
         await query.edit_message_text("📖 Напишите /help для правил.")
+        return
+
+    # ── Leave / close table ──
+    if data == "leave_table":
+        result = gm.leave_game(pid)
+        if not result["ok"]:
+            await query.answer(result["error"], show_alert=True)
+            return
+        if result["closed"]:
+            if result["was_creator"]:
+                await query.edit_message_text("🚫 Вы закрыли стол. Все игроки уведомлены.")
+                for other_pid in result["remaining_players"]:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=other_pid,
+                            text=f"🚫 Создатель закрыл стол {result['game_id']}. Стол удалён."
+                        )
+                    except Exception:
+                        pass
+            else:
+                await query.edit_message_text("👋 Стол пуст — удалён.")
+        else:
+            game_left = result["game"]
+            pname = result["player_name"]
+            remaining = result["remaining_players"]
+            await query.edit_message_text(f"👋 Вы вышли из стола {result['game_id']}.")
+            # Notify remaining players
+            slots_text = f"{len(remaining)}/{game_left.max_players}"
+            for other_pid in remaining:
+                try:
+                    await context.bot.send_message(
+                        chat_id=other_pid,
+                        text=f"👋 {pname} покинул стол.\n⏳ Игроков: {slots_text}",
+                        reply_markup=_waiting_room_keyboard(game_left, other_pid)
+                    )
+                except Exception:
+                    pass
         return
 
     game = gm.get_game_by_player(pid)
