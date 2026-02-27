@@ -108,8 +108,11 @@
   }
 
   /* ── Screens ─────────────────────────────────────────── */
-  .screen { display: none; }
-  .screen.active { display: block; }
+  .screen { display: none !important; }
+  .screen.active { display: block !important; }
+  #lobby-screen.active { display: flex !important; }
+  #waiting-screen.active { display: flex !important; }
+  #result-screen.active { display: flex !important; }
 
   /* ── Lobby screen ───────────────────────────────────── */
   #lobby-screen {
@@ -265,7 +268,7 @@
 
   /* ── Waiting in room ─────────────────────────────────── */
   #waiting-screen {
-    display: flex; flex-direction: column; align-items: center;
+    flex-direction: column; align-items: center;
     justify-content: center; min-height: 70vh; gap: 14px; padding: 24px;
   }
   .waiting-icon { font-size: 64px; animation: pulse 2s infinite; }
@@ -288,7 +291,7 @@
   .empty-slot .player-dot { background: rgba(255,255,255,0.3); }
 
   #result-screen {
-    display: flex; flex-direction: column; align-items: center;
+    flex-direction: column; align-items: center;
     justify-content: center; min-height: 70vh;
     gap: 14px; padding: 24px; text-align: center;
   }
@@ -566,13 +569,7 @@ async function joinTable(gameId) {
   // Stop lobby refresh
   clearInterval(lobbyRefreshTimer);
 
-  // Game already started — show notification to open via bot
-  const phase = data.state?.phase;
-  if (phase && phase !== 'lobby_waiting' && phase !== 'waiting') {
-    showGameStartedScreen(data.state);
-    return;
-  }
-
+  // Show game state directly — works for both waiting room and active game
   updateUI(data.state);
 }
 
@@ -695,6 +692,7 @@ function showScreen(id) {
 function updateUI(s) {
   state = s;
   clearInterval(waitingRefreshTimer);
+  stopGamePolling();
 
   if (s.phase === 'lobby_waiting') {
     showWaitingRoom(s);
@@ -719,6 +717,7 @@ function updateUI(s) {
   }
 
   showScreen('game-screen');
+  startGamePolling();  // keep state fresh for other players' moves
 
   document.getElementById('round-num').textContent = s.round || 1;
   document.getElementById('trump-suit').textContent = s.trump || '?';
@@ -824,10 +823,76 @@ function confirmDiscard() {
   sendAction('discard', selectedDiscard.join(','));
 }
 
-// ── Communication with bot ────────────────────────────────────────────────
-function sendAction(action, data) {
-  const payload = JSON.stringify({ action, data: data !== undefined ? String(data) : null });
-  if (tg) tg.sendData(payload);
+// ── Game polling ─────────────────────────────────────────────────────────
+let gameRefreshTimer = null;
+
+function startGamePolling() {
+  stopGamePolling();
+  gameRefreshTimer = setInterval(refreshGameState, 2000);
+}
+
+function stopGamePolling() {
+  if (gameRefreshTimer) { clearInterval(gameRefreshTimer); gameRefreshTimer = null; }
+}
+
+async function refreshGameState() {
+  if (!myId) return;
+  // Only poll during active game phases
+  const activePhases = ['bid1','bid2','play','declare','discard','waiting_discard'];
+  if (!state || !activePhases.includes(state.phase)) return;
+  // Don't refresh on my turn (would reset card selection)
+  if (state.is_my_turn) return;
+  try {
+    const res = await fetch(`/api/game_state?player_id=${myId}`);
+    const d = await res.json();
+    if (d.ok && d.state && d.state.phase !== state.phase ||
+        (d.ok && d.state && JSON.stringify(d.state.trick) !== JSON.stringify(state.trick))) {
+      updateUI(d.state);
+    }
+  } catch(e) { /* ignore */ }
+}
+
+// ── Communication with server ─────────────────────────────────────────────
+async function sendAction(action, data) {
+  if (!myId) return;
+  stopGamePolling();
+
+  // Optimistic: show "sending" state
+  const statusEl = document.getElementById('status-bar');
+  if (statusEl) { statusEl.textContent = '⏳ Отправка...'; statusEl.className = 'waiting'; }
+
+  let respData;
+  try {
+    const res = await fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_id: myId,
+        action,
+        data: data !== undefined ? String(data) : null
+      }),
+    });
+    respData = await res.json();
+  } catch(e) {
+    tg?.showAlert('Ошибка сети. Попробуйте ещё раз.');
+    if (!tg) alert('Ошибка сети: ' + e.message);
+    startGamePolling();
+    return;
+  }
+
+  if (!respData.ok) {
+    tg?.showAlert(respData.error || 'Ошибка действия');
+    if (!tg) alert(respData.error);
+    startGamePolling();
+    return;
+  }
+
+  // Update UI with new state
+  if (respData.state) {
+    updateUI(respData.state);
+  }
+
+  startGamePolling();
 }
 
 // ── Poll game state while in waiting room ─────────────────────────────────
@@ -854,34 +919,13 @@ async function pollGameState(gameId) {
       return;
     }
 
-    // Game has started!
+    // Game has started! Show it directly in webapp
     clearInterval(waitingRefreshTimer);
-    if (phase && phase !== 'waiting') {
-      // Try to show the game state directly
-      try {
-        updateUI(data.state);
-      } catch(e) {
-        document.getElementById('waiting-msg').textContent = '🎮 Игра началась! Нажмите кнопку в боте.';
-        document.getElementById('waiting-player-list').innerHTML = '';
-        document.getElementById('leave-btn').style.display = 'none';
-      }
-    }
+    updateUI(data.state);
   } catch (e) { /* ignore network errors */ }
 }
 
-// ── Game started screen ──────────────────────────────────────────────────
-function showGameStartedScreen(s) {
-  // Game already started when this player joined — redirect them properly
-  showScreen('waiting-screen');
-  document.getElementById('waiting-msg').textContent = 'Игра уже началась!';
-  document.getElementById('waiting-player-list').innerHTML = `
-    <div class="player-list-item" style="justify-content:center;opacity:0.8">
-      🎮 Нажмите кнопку в боте чтобы открыть игру
-    </div>
-  `;
-  document.getElementById('leave-btn').style.display = 'none';
-  clearInterval(waitingRefreshTimer);
-}
+// (showGameStartedScreen removed — game now shows directly)
 
 
 // ── Leave / close table ──────────────────────────────────────────────────
