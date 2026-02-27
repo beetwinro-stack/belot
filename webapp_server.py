@@ -89,6 +89,41 @@ async def api_join_lobby(request):
     })
 
 
+async def api_create_game(request):
+    """
+    Create a new game from the webapp.
+    Expects JSON: { "player_id": 12345, "player_name": "Иван", "max_players": 4 }
+    """
+    if not _game_manager:
+        return web.json_response({"ok": False, "error": "Server not ready"}, status=503)
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"ok": False, "error": "Bad JSON"}, status=400)
+
+    player_id = body.get("player_id")
+    player_name = body.get("player_name", "Игрок")
+    max_players = int(body.get("max_players", 4))
+
+    if not player_id:
+        return web.json_response({"ok": False, "error": "Missing player_id"}, status=400)
+
+    # If already in a waiting game — leave it first
+    existing = _game_manager.get_game_by_player(int(player_id))
+    if existing:
+        from game import GameState
+        if existing.state == GameState.WAITING:
+            _game_manager.leave_game(int(player_id))
+        else:
+            return web.json_response({"ok": False, "error": "Вы уже в активной игре."})
+
+    game = _game_manager.create_game(int(player_id), player_name, max_players=max_players)
+    state = make_game_state(game, int(player_id))
+    return web.json_response({"ok": True, "game_id": game.game_id, "state": state}, headers={
+        "Access-Control-Allow-Origin": "*",
+    })
+
+
 async def api_leave_lobby(request):
     """
     Called from webapp when player taps Leave/Close on their table.
@@ -288,6 +323,7 @@ async def start_server(game_manager=None):
     app.router.add_get("/health", health)
     app.router.add_get("/api/lobby", api_lobby)
     app.router.add_post("/api/join_lobby", api_join_lobby)
+    app.router.add_post("/api/create_game", api_create_game)
     app.router.add_post("/api/leave_lobby", api_leave_lobby)
 
     runner = web.AppRunner(app)

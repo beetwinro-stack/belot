@@ -226,6 +226,43 @@
   .refresh-spin { animation: spin 0.6s linear; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+  /* ── Create game modal ───────────────────────────────── */
+  #create-modal {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    align-items: center; justify-content: center;
+  }
+  .modal-box {
+    background: #1e5c30;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 90%; max-width: 320px;
+    text-align: center;
+  }
+  .modal-box h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+  .modal-box p { font-size: 13px; opacity: 0.7; margin-bottom: 20px; }
+  .modal-options { display: flex; flex-direction: column; gap: 10px; }
+  .modal-option-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 14px; color: #fff;
+    padding: 14px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .modal-option-btn:hover { background: rgba(255,255,255,0.2); }
+  .modal-option-btn.highlight {
+    background: linear-gradient(135deg, #2196F3, #1565c0);
+    border-color: transparent;
+  }
+  .modal-cancel {
+    margin-top: 10px; background: none; border: none;
+    color: rgba(255,255,255,0.5); font-size: 14px; cursor: pointer;
+    padding: 8px;
+  }
+
   /* ── Waiting in room ─────────────────────────────────── */
   #waiting-screen {
     display: flex; flex-direction: column; align-items: center;
@@ -359,6 +396,25 @@
   <div class="result-sub" id="result-sub"></div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════ -->
+<!--  CREATE GAME MODAL                                 -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="create-modal">
+  <div class="modal-box">
+    <h2>🃏 Новый стол</h2>
+    <p>Выберите количество игроков</p>
+    <div class="modal-options">
+      <button class="modal-option-btn highlight" onclick="createGame(4)">
+        👥 4 игрока — 2 команды
+      </button>
+      <button class="modal-option-btn" onclick="createGame(3)">
+        👤 3 игрока — 1 против 2
+      </button>
+    </div>
+    <button class="modal-cancel" onclick="closeCreateModal()">Отмена</button>
+  </div>
+</div>
+
 <button id="confirm-discard-btn" onclick="confirmDiscard()">🗑 Сбросить выбранные (0/2)</button>
 
 <script>
@@ -482,8 +538,9 @@ function renderTables(games) {
 
 async function joinTable(gameId) {
   if (!myId) {
-    tg?.showAlert('Откройте приложение через Telegram чтобы войти в игру.');
-    return;
+    // Browser test mode — assign fake ID
+    myId = 100000 + Math.floor(Math.random() * 900000);
+    myName = 'Игрок_' + String(myId).slice(-4);
   }
 
   try {
@@ -511,11 +568,36 @@ async function joinTable(gameId) {
 }
 
 function requestNewGame() {
-  // Tell the bot to create a new game via sendData
-  if (tg) {
-    tg.sendData(JSON.stringify({ action: 'new_game' }));
-  } else {
-    alert('Создайте игру командой /newgame в чате бота.');
+  document.getElementById('create-modal').style.display = 'flex';
+}
+
+function closeCreateModal() {
+  document.getElementById('create-modal').style.display = 'none';
+}
+
+async function createGame(maxPlayers) {
+  closeCreateModal();
+  if (!myId) {
+    // In browser without Telegram — use a fake test ID
+    myId = 100000 + Math.floor(Math.random() * 900000);
+    myName = 'Игрок_' + String(myId).slice(-4);
+  }
+  try {
+    const res = await fetch('/api/create_game', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: myId, player_name: myName, max_players: maxPlayers }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      tg?.showAlert(data.error || 'Ошибка создания стола');
+      alert(data.error || 'Ошибка создания стола');
+      return;
+    }
+    clearInterval(lobbyRefreshTimer);
+    updateUI(data.state);
+  } catch(e) {
+    alert('Ошибка соединения: ' + e.message);
   }
 }
 
