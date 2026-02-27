@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Белот</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="https://deck-of-cards.js.org/example/example.css">
+<script src="https://deck-of-cards.js.org/dist/deck.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -81,6 +83,78 @@
   .card-wrap.selected svg { filter: drop-shadow(0 8px 16px rgba(255,220,50,0.7)) drop-shadow(0 3px 6px rgba(0,0,0,0.4)); }
   .card-wrap.invalid { opacity: 0.45; cursor: default; }
   .card-wrap.trump-card svg { filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4)) drop-shadow(0 0 4px rgba(255,200,0,0.3)); }
+
+  /* ── Deck-of-cards library overrides ───────────────── */
+  /* Scale and clip library cards to fit our UI */
+  .doc-card-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* The library creates .card elements — scale them down for our hand */
+  .doc-card-wrap .card {
+    transform-origin: top left;
+    transform: scale(0.62);
+    margin: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    float: none !important;
+    display: block;
+    flex-shrink: 0;
+  }
+
+  /* Smaller cards for the trick area */
+  .doc-small .card {
+    transform: scale(0.50);
+  }
+
+  /* Compensate for scale — avoid huge invisible hit areas */
+  .doc-card-wrap {
+    width: 70px;
+    height: 100px;
+    overflow: visible;
+  }
+  .doc-small {
+    width: 56px;
+    height: 80px;
+  }
+
+  /* Trump: golden glow border */
+  .doc-trump .card {
+    box-shadow: 0 0 0 3px #f0c040, 0 4px 14px rgba(0,0,0,0.5) !important;
+    border-radius: 8px;
+  }
+
+  /* Invalid: greyscale + dim */
+  .doc-invalid .card {
+    filter: grayscale(70%) brightness(0.75);
+  }
+
+  /* Trump star badge */
+  .doc-trump-star {
+    position: absolute;
+    top: 2px; right: 4px;
+    font-size: 11px;
+    color: #f0c040;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* Card hover/active effects via parent .card-wrap */
+  .card-wrap.valid:hover .doc-card-wrap .card,
+  .card-wrap.valid:active .doc-card-wrap .card {
+    box-shadow: 0 0 0 2px #ffe066, 0 6px 18px rgba(255,220,50,0.5) !important;
+  }
+  .card-wrap.selected .doc-card-wrap .card {
+    box-shadow: 0 0 0 3px #ffe066, 0 8px 22px rgba(255,220,50,0.7) !important;
+  }
+  .card-wrap.trump-card.valid:hover .doc-card-wrap .card {
+    box-shadow: 0 0 0 3px #ffd700, 0 6px 18px rgba(255,200,0,0.6) !important;
+  }
 
   /* ── Action buttons ─────────────────────────────────── */
   #action-area { padding: 6px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
@@ -443,39 +517,106 @@ if (tgUser) {
   if (tgUser.last_name) myName += ' ' + tgUser.last_name;
 }
 
-// ── SVG Card renderer ─────────────────────────────────────────────────────
-const SUIT_COLOR = { '♣': '#1a1a2e', '♠': '#1a1a2e', '♥': '#c0392b', '♦': '#c0392b' };
-const RANK_RU = { '7':'7','8':'8','9':'9','10':'10','J':'В','Q':'Д','K':'К','A':'Т' };
+// ── Deck-of-Cards library integration ────────────────────────────────────
+// Lazily initialise the full 52-card deck once the library has loaded.
+let _deckInstance = null;
+function getDeck() {
+  if (!_deckInstance && typeof Deck !== 'undefined') {
+    _deckInstance = Deck();
+  }
+  return _deckInstance;
+}
 
+// Map Belot rank strings → library rank index (A=0, 2=1 … K=12)
+const RANK_TO_LIB = { 'A':0,'7':6,'8':7,'9':8,'10':9,'J':10,'Q':11,'K':12 };
+// Map Belot suit symbols → library suit index (♣=0, ♦=1, ♥=2, ♠=3)
+const SUIT_TO_LIB = { '♣':0,'♦':1,'♥':2,'♠':3 };
+
+/**
+ * Get (or clone-style) a deck-of-cards card element for a given rank/suit.
+ * Returns a <div> DOM element that looks like a real playing card.
+ * We mount into a hidden staging area and clone nodes as needed.
+ */
+const _cardCache = {};
+function getLibraryCardEl(rank, suit) {
+  const key = rank + suit;
+  if (_cardCache[key]) return _cardCache[key].cloneNode(true);
+
+  const deck = getDeck();
+  if (!deck) return null;  // library not loaded yet — caller falls back to SVG
+
+  const rIdx = RANK_TO_LIB[rank];
+  const sIdx = SUIT_TO_LIB[suit];
+  if (rIdx === undefined || sIdx === undefined) return null;
+
+  const cardObj = deck.cards[sIdx * 13 + rIdx];
+  if (!cardObj) return null;
+
+  // Mount to a staging div to generate its DOM
+  const staging = document.createElement('div');
+  staging.style.cssText = 'position:fixed;left:-9999px;top:-9999px;visibility:hidden';
+  document.body.appendChild(staging);
+  cardObj.mount(staging);
+  cardObj.setSide('front');
+
+  // Grab the element, cache it, clean up
+  const el = cardObj.el;
+  _cardCache[key] = el.cloneNode(true);
+  document.body.removeChild(staging);
+  return _cardCache[key].cloneNode(true);
+}
+
+/**
+ * Create a styled card wrapper element using the deck-of-cards library.
+ * Falls back to SVG rendering if the library hasn't loaded.
+ */
+function makeCardEl(rank, suit, { trump = false, invalid = false, small = false } = {}) {
+  const wrapper = document.createElement('div');
+  wrapper.classList.add('doc-card-wrap');
+  if (trump)   wrapper.classList.add('doc-trump');
+  if (invalid) wrapper.classList.add('doc-invalid');
+  if (small)   wrapper.classList.add('doc-small');
+
+  const libEl = getLibraryCardEl(rank, suit);
+  if (libEl) {
+    wrapper.appendChild(libEl);
+  } else {
+    // Fallback: simple SVG while library loads
+    const SUIT_COLOR = { '♣':'#1a1a2e','♠':'#1a1a2e','♥':'#c0392b','♦':'#c0392b' };
+    const color = SUIT_COLOR[suit] || '#1a1a2e';
+    const w = small ? 52 : 64, h = small ? 76 : 96;
+    wrapper.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="7" fill="white" stroke="${trump?'#f0c040':'#ccc'}" stroke-width="${trump?2.5:1.5}"/>
+      <text x="5" y="18" font-size="13" font-weight="bold" font-family="Arial" fill="${color}">${rank}</text>
+      <text x="5" y="32" font-size="14" font-family="Arial" fill="${color}">${suit}</text>
+      <text x="${(w-2)/2}" y="${(h-2)/2+4}" font-size="24" font-family="Arial" fill="${color}" text-anchor="middle">${suit}</text>
+    </svg>`;
+  }
+
+  if (trump) {
+    const star = document.createElement('span');
+    star.className = 'doc-trump-star';
+    star.textContent = '★';
+    wrapper.appendChild(star);
+  }
+  return wrapper;
+}
+
+// Keep makeCardSVG as thin wrapper for backward-compat (trick renderer)
 function makeCardSVG(rank, suit, options = {}) {
+  // Returns HTML string — used by renderTrick innerHTML approach
   const { w = 64, h = 96, trump = false, invalid = false } = options;
+  const SUIT_COLOR = { '♣':'#1a1a2e','♠':'#1a1a2e','♥':'#c0392b','♦':'#c0392b' };
   const color = SUIT_COLOR[suit] || '#1a1a2e';
-  const rankRu = RANK_RU[rank] || rank;
-  let bgFill = 'white';
-  let borderColor = trump ? '#f0c040' : '#ccc';
-  let borderWidth = trump ? 2.5 : 1.5;
-  let opacity = invalid ? 0.5 : 1;
-  let extraBg = trump
-    ? `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="url(#tg${w})" opacity="0.3"/>`
-    : '';
-  const fontSize = 13, suitSize = 14, centerRankSize = 26, centerSuitSize = 28;
+  const opacity = invalid ? 0.5 : 1;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" opacity="${opacity}">
-  <defs>
-    ${trump ? `<linearGradient id="tg${w}" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ffd700"/>
-      <stop offset="100%" stop-color="#ff8c00"/>
-    </linearGradient>` : ''}
-  </defs>
-  <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.2)"/>
-  <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="${bgFill}" stroke="${borderColor}" stroke-width="${borderWidth}"/>
-  ${extraBg}
-  <text x="5" y="${fontSize+2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}">${rankRu}</text>
-  <text x="5" y="${fontSize*2+4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}">${suit}</text>
-  <text x="${w-7}" y="${h-fontSize-2}" font-size="${fontSize}" font-weight="bold" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${rankRu}</text>
-  <text x="${w-7}" y="${h-4}" font-size="${suitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="end">${suit}</text>
-  <text x="${(w-2)/2}" y="${(h-2)/2-2}" font-size="${centerSuitSize}" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle" dominant-baseline="middle">${suit}</text>
-  <text x="${(w-2)/2}" y="${(h-2)/2+centerSuitSize/2+4}" font-size="${centerRankSize}" font-weight="900" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle">${rankRu}</text>
-  ${trump ? `<text x="${w-9}" y="12" font-size="10" fill="#f0c040" text-anchor="middle">★</text>` : ''}
+  <rect x="2" y="2" width="${w-2}" height="${h-2}" rx="8" fill="rgba(0,0,0,0.18)"/>
+  <rect x="0" y="0" width="${w-2}" height="${h-2}" rx="8" fill="white" stroke="${trump?'#f0c040':'#ccc'}" stroke-width="${trump?2.5:1.5}"/>
+  ${trump?`<rect x="3" y="3" width="${w-8}" height="${h-8}" rx="6" fill="none" stroke="#ffe08880" stroke-width="1.5"/>`:''}
+  <text x="5" y="17" font-size="12" font-weight="bold" font-family="Arial,sans-serif" fill="${color}">${rank}</text>
+  <text x="5" y="30" font-size="13" font-family="Arial,sans-serif" fill="${color}">${suit}</text>
+  <text x="${(w-2)/2}" y="${(h-2)/2+4}" font-size="22" font-family="Arial,sans-serif" fill="${color}" text-anchor="middle">${suit}</text>
+  ${trump?`<text x="${w-8}" y="14" font-size="9" fill="#f0c040" text-anchor="middle">★</text>`:''}
 </svg>`;
 }
 
@@ -649,12 +790,17 @@ function renderHand(hand, validIndices, trumpSuit, phase) {
     const isValid = validIndices === null || validIndices.includes(i);
     const isSelected = (phase === 'discard' && selectedDiscard.includes(i)) ||
                        (phase === 'play' && selectedPlayCard === i);
+
     const wrap = document.createElement('div');
     wrap.className = 'card-wrap' +
       (isValid ? ' valid' : ' invalid') +
       (isTrump ? ' trump-card' : '') +
       (isSelected ? ' selected' : '');
-    wrap.innerHTML = makeCardSVG(rank, suit, { trump: isTrump, invalid: !isValid });
+
+    // Use deck-of-cards library card element
+    const cardEl = makeCardEl(rank, suit, { trump: isTrump, invalid: !isValid });
+    wrap.appendChild(cardEl);
+
     if (isValid) {
       wrap.onclick = () => onCardClick(i, phase);
     } else {
@@ -676,10 +822,12 @@ function renderTrick(trick, playerNames, trumpSuit) {
     const name = (playerNames || {})[pid] || '?';
     const slot = document.createElement('div');
     slot.className = 'trick-slot';
-    slot.innerHTML = `
-      ${makeCardSVG(rank, suit, { w: 56, h: 82, trump: isTrump })}
-      <div class="trick-name">${name}</div>
-    `;
+    const cardEl = makeCardEl(rank, suit, { trump: isTrump, small: true });
+    slot.appendChild(cardEl);
+    const nameEl = document.createElement('div');
+    nameEl.className = 'trick-name';
+    nameEl.textContent = name;
+    slot.appendChild(nameEl);
     container.appendChild(slot);
   });
 }
